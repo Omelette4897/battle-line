@@ -1,0 +1,16 @@
+node_modules/
+npm-debug.log*
+
+.env
+.env.*
+
+.DS_Store
+Thumbs.db
+
+work/
+outputs/
+.agents/
+.codex/
+start.ps1
+
+*.log
