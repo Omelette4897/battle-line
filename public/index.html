@@ -11,8 +11,8 @@
       <section class="lobby" id="lobby">
         <div class="lobby-start" id="lobbyStart">
           <div>
-            <p class="eyebrow">2人対戦カードゲーム</p>
             <h1>バトルライン</h1>
+            <p class="lobby-copy">部屋を作って、2人で対戦</p>
           </div>
           <div class="lobby-form">
             <label>
@@ -46,24 +46,36 @@
       <section class="game hidden" id="game">
         <header class="topbar">
           <div>
-            <p class="eyebrow">Room <span id="roomIdLabel"></span></p>
             <h1 id="statusLabel">接続中</h1>
           </div>
           <div class="top-actions">
             <button class="mobile-rule-button" id="ruleButton">ルール</button>
             <button id="logButton">ログ一覧</button>
+            <button id="passButton">パス</button>
             <button id="surrenderButton">降参</button>
           </div>
         </header>
 
         <div class="players">
           <div class="player-card" id="p1Card">Player 1</div>
-          <div class="deck-card">
-            <div class="deck-back" aria-hidden="true"></div>
-            <span id="deckLabel">山札</span>
-            <strong id="deckCount">0</strong>
+          <div class="deck-area">
+            <button class="deck-card" id="troopDeckButton" type="button">
+              <div class="deck-back" aria-hidden="true"></div>
+              <span id="deckLabel">部隊</span>
+              <strong id="deckCount">0</strong>
+            </button>
+            <button class="deck-card tactic-deck" id="tacticDeckButton" type="button">
+              <div class="deck-back tactic-back" aria-hidden="true"></div>
+              <span>戦術</span>
+              <strong id="tacticDeckCount">0</strong>
+            </button>
           </div>
           <div class="player-card" id="p2Card">Player 2</div>
+        </div>
+        <div class="tactic-status" id="tacticStatus">
+          <span id="p1Tactics">戦術 0</span>
+          <span id="drawPrompt">カードを配置後、引く山札を選びます</span>
+          <span id="p2Tactics">戦術 0</span>
         </div>
 
         <div class="play-layout" id="playLayout">
@@ -84,6 +96,26 @@
             <div class="hand-head">
               <h2>あなたの手札</h2>
               <p id="handHint">カードを選んで旗を押す</p>
+              <div class="sort-controls" aria-label="手札の並び替え">
+                <button id="sortOriginalButton" type="button">元順</button>
+                <button id="sortColorButton" type="button">色順</button>
+                <button id="sortValueButton" type="button">数字順</button>
+              </div>
+            </div>
+            <div class="tactic-action-bar hidden" id="tacticActionBar">
+              <span id="tacticActionText">選択中</span>
+              <div class="tactic-action-buttons">
+                <button id="tacticMoveButton" type="button">移動先を選ぶ</button>
+                <button id="tacticDiscardButton" type="button">除外する</button>
+                <button class="secondary" id="tacticCancelButton" type="button">キャンセル</button>
+              </div>
+            </div>
+            <div class="review-banner hidden" id="reviewBanner">
+              <div>
+                <strong id="reviewTitle">決着</strong>
+                <span id="reviewText">盤面を確認できます</span>
+              </div>
+              <button id="reviewResultButton" type="button">結果を見る</button>
             </div>
             <div class="hand" id="hand"></div>
           </div>
@@ -97,6 +129,19 @@
             <div class="result-actions">
               <button id="resultRestartButton">再戦する</button>
               <button class="secondary" id="resultLobbyButton">ロビーに戻る</button>
+            </div>
+          </div>
+        </aside>
+
+        <aside class="result-modal hidden" id="tacticModal" aria-labelledby="tacticModalTitle">
+          <div class="result-card tactic-detail-card">
+            <p class="eyebrow" id="tacticModalCategory">戦術カード</p>
+            <h2 id="tacticModalTitle">戦術名</h2>
+            <p id="tacticModalText"></p>
+            <p class="tactic-modal-status" id="tacticModalStatus"></p>
+            <div class="result-actions">
+              <button id="tacticUseButton">このカードを使う</button>
+              <button class="secondary" id="tacticCloseButton">閉じる</button>
             </div>
           </div>
         </aside>
@@ -119,6 +164,8 @@
             </div>
             <div class="rule-reference">
               <p>手札から1枚選んで旗へ配置。旗は各3枚まで。両者3枚、または相手が逆転不能なら獲得。5旗か連続3旗で勝利。</p>
+              <p>片方が3枚完成し、場に見えているカードだけで相手が上回れないと分かる場合、その旗を獲得します。獲得できる旗が複数ある場合は、カードを置いた直後にまとめて判定します。</p>
+              <p>同じ役・同じ合計値の場合は、先に3枚を完成させたプレイヤーがその旗を獲得します。</p>
               <h3>役の強さ</h3>
               <ol class="formation-list">
                 <li><span class="formation-name">1. ウェッジ</span><span class="formation-copy">同色連番</span><span class="formation-cards"><i class="sample-card red">4</i><i class="sample-card red">5</i><i class="sample-card red">6</i></span></li>
@@ -127,6 +174,27 @@
                 <li><span class="formation-name">4. スカーミッシャー</span><span class="formation-copy">連番</span><span class="formation-cards"><i class="sample-card red">2</i><i class="sample-card green">3</i><i class="sample-card gray">4</i></span></li>
                 <li><span class="formation-name">5. ホスト</span><span class="formation-copy">合計値</span><span class="formation-cards"><i class="sample-card yellow">1</i><i class="sample-card purple">5</i><i class="sample-card blue">9</i></span></li>
               </ol>
+              <h3>戦術カード</h3>
+              <div class="tactic-rules">
+                <section>
+                  <h4>士気高揚</h4>
+                  <p><strong>アレクサンドロス / ダリウス</strong><span class="implemented">実装済み</span> フラッグ獲得時に好きな色と数字として扱うリーダー。各プレイヤー1枚まで。</p>
+                  <p><strong>援軍騎兵</strong><span class="implemented">実装済み</span> フラッグ獲得時に好きな色の8として扱う。</p>
+                  <p><strong>盾</strong><span class="implemented">実装済み</span> フラッグ獲得時に好きな色の1、2、3のいずれかとして扱う。</p>
+                </section>
+                <section>
+                  <h4>環境</h4>
+                  <p><strong>霧</strong><span class="implemented">実装済み</span> その旗は役を無視し、配置カードの合計値で勝負する。</p>
+                  <p><strong>泥濘</strong><span class="implemented">実装済み</span> その旗は4枚でフォーメーションを作る。</p>
+                </section>
+                <section>
+                  <h4>謀略</h4>
+                  <p><strong>偵察</strong><span class="implemented">実装済み</span> 山札から合計3枚引き、手札から2枚を対応する山札の上に戻す。このターンの通常ドローはない。</p>
+                  <p><strong>配置転換</strong><span class="implemented">実装済み</span> 自分の未獲得旗上の部隊カードまたは士気カードを、別の空き枠へ移すか除外する。</p>
+                  <p><strong>脱走</strong><span class="implemented">実装済み</span> 相手の未獲得旗上の部隊カードまたは士気カードを1枚除外する。</p>
+                  <p><strong>裏切り</strong><span class="implemented">実装済み</span> 相手の未獲得旗上の部隊カード1枚を、自分側の空き枠へ移す。</p>
+                </section>
+              </div>
             </div>
           </div>
         </aside>
