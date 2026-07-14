@@ -111,6 +111,7 @@ function createGame(room) {
     pendingDraw: null,
     pendingScout: null,
     lastAutoDraw: null,
+    lastAutoPass: null,
     playCount: 0,
     lastClaimEvents: [],
     troopDeckEmptyLogged: false,
@@ -443,18 +444,22 @@ function drawAfterPlay(room, playerId, deckType) {
   logDeckEmpty(game, deckType);
   game.pendingDraw = null;
   game.currentPlayer = opponent(playerId);
+  resolveAutomaticPasses(game, room);
 }
 
 export function advanceAfterAction(game, playerId, room) {
   game.lastAutoDraw = null;
+  game.lastAutoPass = null;
   const drawableDecks = availableDeckTypes(game);
   if (drawableDecks.length === 0) {
     game.currentPlayer = opponent(playerId);
+    resolveAutomaticPasses(game, room);
     return;
   }
   if (drawableDecks.length === 1) {
     autoDrawAfterAction(game, playerId, room, drawableDecks[0]);
     game.currentPlayer = opponent(playerId);
+    resolveAutomaticPasses(game, room);
     return;
   }
   game.pendingDraw = { playerId };
@@ -528,6 +533,7 @@ function scoutReturn(room, playerId, cardId) {
   if (game.pendingScout.returnRemaining === 0) {
     game.pendingScout = null;
     game.currentPlayer = opponent(playerId);
+    resolveAutomaticPasses(game, room);
   }
 }
 
@@ -541,6 +547,20 @@ function passTurn(room, playerId) {
 
   game.log.push(`${playerName(room, playerId)} がパス`);
   game.currentPlayer = opponent(playerId);
+  resolveAutomaticPasses(game, room);
+}
+
+function resolveAutomaticPasses(game, room) {
+  if (game.winner || game.pendingDraw || game.pendingScout) return;
+  const passedPlayers = new Set();
+  while (canPass(game, game.currentPlayer) && !passedPlayers.has(game.currentPlayer)) {
+    const passedPlayer = game.currentPlayer;
+    passedPlayers.add(passedPlayer);
+    const message = `${playerName(room, passedPlayer)} は置けるカードがないため自動でパスしました`;
+    game.lastAutoPass = { playerId: passedPlayer, message };
+    game.log.push(message);
+    game.currentPlayer = opponent(passedPlayer);
+  }
 }
 
 function hasDrawableDeck(game) {
@@ -548,7 +568,9 @@ function hasDrawableDeck(game) {
 }
 
 function canUseTactic(game, playerId) {
-  return game.usedTactics[playerId].length <= game.usedTactics[opponent(playerId)].length;
+  const ownUsed = game.usedTactics?.[playerId] || [];
+  const otherUsed = game.usedTactics?.[opponent(playerId)] || [];
+  return ownUsed.length <= otherUsed.length;
 }
 
 function canPass(game, playerId) {
@@ -556,37 +578,41 @@ function canPass(game, playerId) {
 }
 
 function canPlayAnyTroop(game, playerId) {
-  const hasTroop = game.hands[playerId].some((card) => card.type === "troop");
+  const flags = game.flags || [];
+  const hand = game.hands?.[playerId] || [];
+  const hasTroop = hand.some((card) => card.type === "troop");
   if (!hasTroop) return false;
-  return game.flags.some((flag) => !flag.owner && flag.cards[playerId].length < requiredCardsForFlag(flag));
+  return flags.some((flag) => !flag.owner && flag.cards[playerId].length < requiredCardsForFlag(flag));
 }
 
 function canPlayAnyImplementedTactic(game, playerId) {
   if (!canUseTactic(game, playerId)) return false;
-  return game.hands[playerId].some((card) => card.type === "tactic" && canPlayTacticCard(game, playerId, card));
+  const hand = game.hands?.[playerId] || [];
+  return hand.some((card) => card.type === "tactic" && canPlayTacticCard(game, playerId, card));
 }
 
 function canPlayTacticCard(game, playerId, card) {
+  const flags = game.flags || [];
   if (!IMPLEMENTED_TACTICS.has(card.id)) return false;
   if (card.id === "tactic-scout") return game.troopDeck.length + game.tacticDeck.length >= 3;
   if (isMoraleCard(card)) {
     if (isLeaderCard(card) && hasUsedLeader(game, playerId)) return false;
-    return game.flags.some((flag) => !flag.owner && flag.cards[playerId].length < requiredCardsForFlag(flag));
+    return flags.some((flag) => !flag.owner && flag.cards[playerId].length < requiredCardsForFlag(flag));
   }
   if (card.id === "tactic-fog" || card.id === "tactic-mud") {
-    return game.flags.some((flag) => !flag.owner && !flag.tactics.some((tactic) => tactic.id === card.id));
+    return flags.some((flag) => !flag.owner && !flag.tactics.some((tactic) => tactic.id === card.id));
   }
   if (card.id === "tactic-redeploy") {
-    return game.flags.some((flag) => !flag.owner && flag.cards[playerId].some((unit) => isUnitLikeCard(unit)));
+    return flags.some((flag) => !flag.owner && flag.cards[playerId].some((unit) => isUnitLikeCard(unit)));
   }
   if (card.id === "tactic-deserter") {
     const otherId = opponent(playerId);
-    return game.flags.some((flag) => !flag.owner && flag.cards[otherId].some((unit) => isUnitLikeCard(unit)));
+    return flags.some((flag) => !flag.owner && flag.cards[otherId].some((unit) => isUnitLikeCard(unit)));
   }
   if (card.id === "tactic-traitor") {
     const otherId = opponent(playerId);
-    return game.flags.some((flag) => !flag.owner && flag.cards[otherId].some((unit) => unit.type === "troop")) &&
-      game.flags.some((flag) => !flag.owner && flag.cards[playerId].length < requiredCardsForFlag(flag));
+    return flags.some((flag) => !flag.owner && flag.cards[otherId].some((unit) => unit.type === "troop")) &&
+      flags.some((flag) => !flag.owner && flag.cards[playerId].length < requiredCardsForFlag(flag));
   }
   return false;
 }
@@ -631,6 +657,10 @@ function leaveRoom(room, playerId) {
 }
 
 function claimAvailableFlags(game, playerId, room) {
+  return claimAvailableFlagsForPlayers(game, [playerId, opponent(playerId)], room);
+}
+
+function claimAvailableFlagsForPlayers(game, playerIds, room) {
   const claimEvents = [];
   game.flags.forEach((flag, index) => {
     if (flag.owner) return;
@@ -640,8 +670,13 @@ function claimAvailableFlags(game, playerId, room) {
       if (event) claimEvents.push(event);
       return;
     }
-    const event = claimProvenFlag(game, flag, index, playerId, room);
-    if (event) claimEvents.push(event);
+    for (const claimPlayerId of playerIds) {
+      const event = claimProvenFlag(game, flag, index, claimPlayerId, room);
+      if (event) {
+        claimEvents.push(event);
+        break;
+      }
+    }
   });
   return claimEvents;
 }
@@ -854,8 +889,10 @@ function isUnitLikeCard(card) {
 }
 
 function hasUsedLeader(game, playerId) {
-  return game.usedTactics[playerId].some((card) => isLeaderCard(card)) ||
-    game.flags.some((flag) => flag.cards[playerId].some((card) => isLeaderCard(card)));
+  const usedTactics = game.usedTactics?.[playerId] || [];
+  const flags = game.flags || [];
+  return usedTactics.some((card) => isLeaderCard(card)) ||
+    flags.some((flag) => flag.cards[playerId].some((card) => isLeaderCard(card)));
 }
 
 function refreshCompletedAt(flag, playCount) {
@@ -939,6 +976,7 @@ function publicState(room, playerId) {
           flags,
           lastClaimEvents: game.lastClaimEvents,
           lastAutoDraw: game.lastAutoDraw,
+          lastAutoPass: game.lastAutoPass,
           restartVotes: room.restartVotes,
           opponentLeft: Boolean(room.leftBy && room.leftBy !== playerId),
           opponentInactive: Boolean(room.players[otherId]) && Date.now() - otherLastSeenAt > PLAYER_INACTIVE_MS,

@@ -135,7 +135,8 @@ input.input-error {
 }
 
 .lobby button,
-.top-actions button {
+.top-actions button,
+.hand-surrender-button {
   min-height: 44px;
   border-radius: 8px;
   padding: 0 16px;
@@ -583,6 +584,10 @@ input.input-error {
   color: #fff8df;
   display: grid;
   grid-template-rows: 1fr auto 1fr;
+  grid-template-areas:
+    "top"
+    "marker"
+    "bottom";
   gap: 8px;
   text-align: center;
 }
@@ -602,7 +607,36 @@ input.input-error {
 }
 
 .flag.tactic-source-picking {
-  box-shadow: none;
+  box-shadow: none !important;
+  cursor: default;
+  pointer-events: none;
+}
+
+.flag.tactic-choice-waiting {
+  box-shadow: none !important;
+  cursor: default;
+  pointer-events: none;
+}
+
+.flag.tactic-source-picking:not(:disabled):hover,
+.flag.tactic-source-picking:hover,
+.flag.tactic-source-picking:focus,
+.flag.tactic-source-picking:focus-visible,
+.flag.tactic-source-picking:active,
+.flag.tactic-source-picking.playable,
+.flag.tactic-choice-waiting:not(:disabled):hover,
+.flag.tactic-choice-waiting:hover,
+.flag.tactic-choice-waiting:focus,
+.flag.tactic-choice-waiting:focus-visible,
+.flag.tactic-choice-waiting:active,
+.flag.tactic-choice-waiting.playable {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.flag.tactic-source-picking .mini.tactic-source-candidate,
+.flag.tactic-source-picking .mini.tactic-source-selected {
+  pointer-events: auto;
 }
 
 .flag.tactic-targeting .mini.tactic-source-candidate,
@@ -641,15 +675,41 @@ input.input-error {
 }
 
 .flag.claimed-by-me {
+  grid-template-rows: 1fr 1fr;
+  grid-template-areas:
+    "top"
+    "bottom";
+  border-color: rgba(149, 224, 180, 0.48);
+  background:
+    radial-gradient(circle at 50% 98%, rgba(149, 224, 180, 0.2), transparent 44%),
+    linear-gradient(rgba(15, 31, 24, 0.1), rgba(18, 41, 31, 0.18)),
+    rgba(255, 248, 223, 0.075);
   box-shadow:
-    inset 0 0 0 1px rgba(140, 220, 184, 0.24),
-    inset 0 0 28px rgba(7, 14, 12, 0.32);
+    inset 0 0 0 1px rgba(149, 224, 180, 0.34),
+    inset 0 0 24px rgba(149, 224, 180, 0.09),
+    0 0 20px rgba(149, 224, 180, 0.11);
 }
 
 .flag.claimed-by-other {
+  grid-template-rows: 1fr 1fr;
+  grid-template-areas:
+    "top"
+    "bottom";
+  border-color: rgba(196, 190, 174, 0.2);
+  background:
+    linear-gradient(rgba(9, 14, 13, 0.42), rgba(9, 14, 13, 0.54)),
+    rgba(255, 248, 223, 0.035);
   box-shadow:
     inset 0 0 0 1px rgba(233, 116, 116, 0.18),
     inset 0 0 28px rgba(7, 14, 12, 0.36);
+}
+
+.flag.claimed-by-me::before {
+  background: rgba(8, 24, 17, 0.06);
+}
+
+.flag.claimed-by-other::before {
+  background: rgba(8, 12, 11, 0.26);
 }
 
 .flag.claim-flash {
@@ -685,7 +745,52 @@ input.input-error {
 }
 
 .flag.claimed .lane {
+  position: relative;
   opacity: 0.7;
+}
+
+.flag.claimed .lane.top {
+  padding-bottom: 8px;
+}
+
+.flag.claimed .lane.bottom {
+  padding-top: 8px;
+}
+
+.flag.claimed .lane.top::after {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: -4px;
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(245, 219, 145, 0.54), transparent);
+  box-shadow: 0 0 8px rgba(245, 219, 145, 0.16);
+}
+
+.flag.claimed-by-me .lane.bottom,
+.flag.claimed-by-other .lane.top {
+  opacity: 0.92;
+}
+
+.flag.claimed-by-me .lane {
+  opacity: 0.84;
+}
+
+.flag.claimed-by-me .lane.bottom {
+  opacity: 1;
+}
+
+.flag.claimed-by-other .lane {
+  opacity: 0.58;
+}
+
+.flag.claimed-by-other .lane.top {
+  opacity: 0.78;
+}
+
+.flag.claimed .mini-cards {
+  gap: 4px;
 }
 
 .flag.claimed .flag-marker::before,
@@ -695,14 +800,43 @@ input.input-error {
   opacity: 0.58;
 }
 
+.flag.claimed-by-me .flag-marker::before,
+.flag.claimed-by-me .flag-marker::after,
+.flag.claimed-by-me .flag-marker i {
+  filter: saturate(1.12) brightness(1.08);
+  opacity: 0.9;
+}
+
 .flag-marker {
   position: relative;
+  grid-area: marker;
   width: 54px;
   height: 62px;
   margin: 0 auto;
   display: grid;
   place-items: center;
   color: #1b241f;
+  transition:
+    transform 180ms ease,
+    filter 180ms ease,
+    opacity 180ms ease;
+}
+
+.flag.claimed .flag-marker {
+  position: absolute;
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
+}
+
+.flag.claimed-by-me .flag-marker {
+  bottom: 4px;
+  filter: drop-shadow(0 0 15px rgba(149, 224, 180, 0.4));
+}
+
+.flag.claimed-by-other .flag-marker {
+  top: 4px;
+  filter: drop-shadow(0 0 14px rgba(233, 116, 116, 0.24));
 }
 
 .flag-marker::before {
@@ -761,6 +895,17 @@ input.input-error {
   box-shadow: 0 5px 12px rgba(0, 0, 0, 0.28);
 }
 
+.flag-marker span .flag-owner-name,
+.flag-marker span small {
+  display: inline;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.flag-marker span small {
+  margin-left: 0.22em;
+}
+
 .flag-tactics {
   position: absolute;
   left: 50%;
@@ -816,18 +961,25 @@ input.input-error {
 .flag.claimed-by-me .flag-marker span {
   border-color: rgba(140, 220, 184, 0.8);
   background: rgba(39, 92, 67, 0.96);
+  color: #e8fff2;
 }
 
 .flag.claimed-by-other .flag-marker span {
   border-color: rgba(233, 116, 116, 0.78);
   background: rgba(112, 44, 42, 0.96);
+  color: #fff0ed;
 }
 
 .lane {
+  grid-area: top;
   display: grid;
   grid-template-rows: 1fr;
   gap: 0;
   min-height: 150px;
+}
+
+.lane.bottom {
+  grid-area: bottom;
 }
 
 .mini-cards {
@@ -989,6 +1141,22 @@ input.input-error {
   color: #1d241f;
 }
 
+.hand-surrender-button {
+  flex: 0 0 auto;
+  min-height: 28px;
+  margin-left: 2px;
+  padding: 0 10px;
+  border-color: rgba(228, 124, 98, 0.46);
+  background: rgba(96, 45, 38, 0.72);
+  color: #ffe7df;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.hand-surrender-button:disabled {
+  opacity: 0.48;
+}
+
 .tactic-action-bar {
   display: flex;
   align-items: center;
@@ -1075,6 +1243,22 @@ input.input-error {
   color: #17231d;
   font-size: 0.78rem;
   font-weight: 1000;
+}
+
+.review-banner.restart-offer {
+  border-color: rgba(149, 224, 180, 0.58);
+  background: linear-gradient(135deg, rgba(32, 78, 56, 0.94), rgba(88, 61, 24, 0.9));
+  box-shadow: 0 12px 28px rgba(37, 89, 63, 0.28);
+}
+
+.review-banner.restart-offer button {
+  border-color: rgba(255, 248, 223, 0.42);
+  background: #95e0b4;
+  color: #12241b;
+}
+
+.review-banner.restart-waiting {
+  border-color: rgba(240, 195, 90, 0.5);
 }
 
 .hand {
@@ -1659,9 +1843,14 @@ input.input-error {
   }
 
   .topbar {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
     gap: 6px;
+  }
+
+  .topbar > div:first-child {
+    min-width: 0;
+    flex: 1 1 auto;
   }
 
   .game {
@@ -1669,13 +1858,44 @@ input.input-error {
   }
 
   .topbar h1 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 1.1rem;
+  }
+
+  .top-actions {
+    flex: 0 0 auto;
+    justify-content: flex-end;
+    gap: 5px;
+    flex-wrap: nowrap;
   }
 
   .top-actions button {
     min-height: 34px;
-    padding: 0 9px;
+    padding: 0 8px;
     font-size: 0.76rem;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 380px) {
+    .topbar {
+      gap: 4px;
+    }
+
+    .topbar h1 {
+      font-size: 0.98rem;
+    }
+
+    .top-actions {
+      gap: 4px;
+    }
+
+    .top-actions button {
+      min-height: 32px;
+      padding: 0 6px;
+      font-size: 0.68rem;
+    }
   }
 
   .players {
@@ -1784,6 +2004,28 @@ input.input-error {
     height: 36px;
   }
 
+  .flag.has-mud.claimed .flag-marker {
+    z-index: 4;
+    border-radius: 6px;
+    opacity: 0.52;
+    background: transparent;
+  }
+
+  .flag.has-mud.claimed .flag-marker::before {
+    opacity: 0.62;
+    filter: drop-shadow(0 0 3px rgba(255, 248, 223, 0.32));
+  }
+
+  .flag.has-mud.claimed .flag-marker::after {
+    opacity: 0.5;
+    background: linear-gradient(135deg, rgba(255, 240, 168, 0.78), rgba(208, 148, 52, 0.72));
+    filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.22));
+  }
+
+  .flag.has-mud.claimed .flag-marker i {
+    opacity: 0.6;
+  }
+
   .flag-marker::before {
     left: 3px;
     top: 3px;
@@ -1812,6 +2054,20 @@ input.input-error {
   .mini-cards {
     min-height: 58px;
     gap: 2px;
+  }
+
+  .flag.claimed .lane.top {
+    padding-bottom: 4px;
+  }
+
+  .flag.claimed .lane.bottom {
+    padding-top: 4px;
+  }
+
+  .flag.claimed .lane.top::after {
+    left: 8%;
+    right: 8%;
+    bottom: -2px;
   }
 
   .empty,
@@ -1843,9 +2099,34 @@ input.input-error {
 
   .flag-marker span {
     bottom: -6px;
-    max-width: 46px;
-    padding: 2px 4px;
-    font-size: 0.44rem;
+    width: max-content;
+    min-width: 34px;
+    max-width: 58px;
+    border-radius: 7px;
+    padding: 2px 3px;
+    font-size: 0.46rem;
+    line-height: 1.05;
+    white-space: normal;
+  }
+
+  .flag.has-mud.claimed .flag-marker span {
+    bottom: -8px;
+    background: rgba(18, 27, 22, 0.58);
+    box-shadow:
+      0 0 0 1px rgba(255, 248, 223, 0.12),
+      0 4px 8px rgba(0, 0, 0, 0.22);
+  }
+
+  .flag-marker span .flag-owner-name,
+  .flag-marker span small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .flag-marker span small {
+    margin-left: 0;
   }
 
   .flag-tactics {
@@ -1869,6 +2150,7 @@ input.input-error {
   .hand-head {
     align-items: center;
     gap: 4px 8px;
+    flex-wrap: nowrap;
   }
 
   .hand-head h2 {
@@ -1877,17 +2159,28 @@ input.input-error {
   }
 
   .hand-head p {
-    order: 3;
-    flex: 1 0 100%;
+    order: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 0.72rem;
   }
 
   .sort-controls {
+    flex: 0 0 auto;
     margin-left: auto;
     gap: 3px;
   }
 
   .sort-controls button {
+    min-height: 24px;
+    padding: 0 6px;
+    font-size: 0.62rem;
+  }
+
+  .hand-surrender-button {
     min-height: 24px;
     padding: 0 6px;
     font-size: 0.62rem;

@@ -154,9 +154,12 @@ test("通常ドローで片方の山札だけ残っている場合は自動で�
     troopDeck: [troop("red", 10)],
     tacticDeck: [],
     hands: { p1: [], p2: [] },
+    flags: flags(),
     pendingDraw: null,
     currentPlayer: "p1",
     lastAutoDraw: null,
+    lastAutoPass: null,
+    usedTactics: { p1: [], p2: [] },
     troopDeckEmptyLogged: false,
     tacticDeckEmptyLogged: true,
     log: []
@@ -171,9 +174,10 @@ test("通常ドローで片方の山札だけ残っている場合は自動で�
   advanceAfterAction(game, "p1", room);
 
   assert.equal(game.pendingDraw, null);
-  assert.equal(game.currentPlayer, "p2");
+  assert.equal(game.currentPlayer, "p1");
   assert.equal(game.hands.p1.length, 1);
   assert.equal(game.lastAutoDraw.deckType, "troop");
+  assert.equal(game.lastAutoPass.playerId, "p2");
   assert.match(game.lastAutoDraw.message, /戦術山札がないため/);
 });
 
@@ -211,8 +215,9 @@ test("normal play waits for deck choice before changing turns", () => {
   drawAfterPlay(room, "p1", "tactic");
 
   assert.equal(room.game.pendingDraw, null);
-  assert.equal(room.game.currentPlayer, "p2");
+  assert.equal(room.game.currentPlayer, "p1");
   assert.equal(room.game.hands.p1[0].id, "tactic-fog");
+  assert.equal(room.game.lastAutoPass.playerId, "p2");
 });
 
 test("tactic use is blocked when own used tactics already exceed opponent", () => {
@@ -317,7 +322,8 @@ test("scout draws three cards, returns two, and skips normal draw", () => {
 
   assert.equal(room.game.pendingScout, null);
   assert.equal(room.game.pendingDraw, null);
-  assert.equal(room.game.currentPlayer, "p2");
+  assert.equal(room.game.currentPlayer, "p1");
+  assert.equal(room.game.lastAutoPass.playerId, "p2");
   assert.equal(room.game.hands.p1.length, 1);
 });
 
@@ -455,4 +461,30 @@ test("public state exposes opponent hand breakdown and restart flags", () => {
 
   assert.deepEqual(state.game.opponentHandBreakdown, { troop: 1, tactic: 1 });
   assert.deepEqual(state.game.restartVotes, { p1: false, p2: true });
+});
+
+test("opponent play can prove my completed flag when public cards block every comeback", () => {
+  const testFlags = flags();
+  testFlags[0] = flag({
+    cards: {
+      p1: [troop("purple", 1), troop("purple", 2), troop("purple", 3)],
+      p2: []
+    },
+    completedAt: { p1: 3, p2: null }
+  });
+  testFlags[1].cards.p1.push(troop("green", 2), troop("green", 3));
+  testFlags[2].cards.p2.push(troop("green", 5), troop("green", 6), troop("green", 7));
+
+  const room = roomWithGame({
+    flags: testFlags,
+    hands: { p1: [], p2: [troop("green", 4)] },
+    currentPlayer: "p2",
+    playCount: 3
+  });
+
+  playCard(room, "p2", "green-4", 0);
+
+  assert.equal(room.game.flags[0].owner, "p1");
+  assert.equal(room.game.lastClaimEvents[0].owner, "p1");
+  assert.equal(room.game.lastClaimEvents[0].type, "proven");
 });

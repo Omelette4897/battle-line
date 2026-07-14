@@ -25,7 +25,7 @@ const roomInput = document.querySelector("#roomInput");
 const createRoomButton = document.querySelector("#createRoomButton");
 const joinRoomButton = document.querySelector("#joinRoomButton");
 const surrenderButton = document.querySelector("#surrenderButton");
-const passButton = document.querySelector("#passButton");
+const exitButton = document.querySelector("#exitButton");
 const ruleButton = document.querySelector("#ruleButton");
 const logButton = document.querySelector("#logButton");
 const closeLogButton = document.querySelector("#closeLogButton");
@@ -74,7 +74,6 @@ const reviewBanner = document.querySelector("#reviewBanner");
 const reviewTitle = document.querySelector("#reviewTitle");
 const reviewText = document.querySelector("#reviewText");
 const reviewResultButton = document.querySelector("#reviewResultButton");
-const sortOriginalButton = document.querySelector("#sortOriginalButton");
 const sortColorButton = document.querySelector("#sortColorButton");
 const sortValueButton = document.querySelector("#sortValueButton");
 const log = document.querySelector("#log");
@@ -125,6 +124,10 @@ surrenderButton.addEventListener("click", async () => {
   await surrenderGame();
 });
 
+exitButton.addEventListener("click", async () => {
+  await exitGame();
+});
+
 resultRestartButton.addEventListener("click", async () => {
   await restartGame();
 });
@@ -142,12 +145,10 @@ reviewResultButton.addEventListener("click", () => {
 tacticCloseButton.addEventListener("click", () => closeTacticModal());
 tacticUseButton.addEventListener("click", async () => useTacticFromModal());
 
-sortOriginalButton.addEventListener("click", () => setHandSort("original"));
 sortColorButton.addEventListener("click", () => setHandSort("color"));
 sortValueButton.addEventListener("click", () => setHandSort("value"));
 troopDeckButton.addEventListener("click", () => handleDeckClick("troop"));
 tacticDeckButton.addEventListener("click", () => handleDeckClick("tactic"));
-passButton.addEventListener("click", () => passTurn());
 tacticMoveButton.addEventListener("click", () => chooseTacticMove());
 tacticDiscardButton.addEventListener("click", () => discardSelectedTacticCard());
 tacticCancelButton.addEventListener("click", () => cancelTacticAction());
@@ -164,6 +165,19 @@ async function surrenderGame() {
   state.selectedCardId = null;
   state.resultModalOpen = false;
   await refresh();
+}
+
+async function exitGame() {
+  const gameState = state.snapshot?.game;
+  if (gameState && !gameState.winner) {
+    if (!window.confirm("降参してロビーに戻りますか？このゲームは終了します。")) return;
+    try {
+      await api(`/api/rooms/${state.roomId}/surrender`, { method: "POST", auth: true });
+    } catch (error) {
+      showError(error.message);
+    }
+  }
+  await returnToLobby();
 }
 
 async function restartGame() {
@@ -302,7 +316,7 @@ function showReconnectState() {
   if (state.snapshot?.game) {
     showGame();
     statusLabel.textContent = "再接続中";
-    handHint.textContent = "通信が戻ったら自動で復帰します";
+    setHandHint("通信が戻ったら自動で復帰します", "再接続中");
     return;
   }
   showLobby();
@@ -343,7 +357,6 @@ function render() {
   renderPlayerCards(snapshot, game);
   renderBoardLabels(snapshot);
   surrenderButton.disabled = Boolean(game.winner);
-  passButton.disabled = !game.canPass || game.currentPlayer !== snapshot.playerId || Boolean(game.winner) || Boolean(game.pendingDraw) || Boolean(game.pendingScout);
   p1Card.classList.toggle("active", game.currentPlayer === "p1" && !game.winner);
   p2Card.classList.toggle("active", game.currentPlayer === "p2" && !game.winner);
   statusLabel.textContent = `プレイヤー名: ${currentName}`;
@@ -351,37 +364,46 @@ function render() {
   if (!game.winner) state.resultModalOpen = false;
 
   if (game.winner) {
-    handHint.textContent = game.winner === snapshot.playerId ? "あなたの勝ち" : `${otherName}の勝ち`;
+    setHandHint("盤面を確認できます", "盤面確認");
     renderResultModal(snapshot, game);
   } else if (game.pendingScout?.playerId === snapshot.playerId) {
-    handHint.textContent = game.pendingScout.drawRemaining > 0
-      ? `偵察：山札をあと${game.pendingScout.drawRemaining}枚選んでください`
-      : `偵察：戻すカードをあと${game.pendingScout.returnRemaining}枚選んでください。偵察で引いたカードは右側に表示されます`;
+    setHandHint(
+      game.pendingScout.drawRemaining > 0
+        ? `偵察：山札をあと${game.pendingScout.drawRemaining}枚選んでください`
+        : `偵察：戻すカードをあと${game.pendingScout.returnRemaining}枚選んでください。偵察で引いたカードは右側に表示されます`,
+      game.pendingScout.drawRemaining > 0 ? `偵察 残り${game.pendingScout.drawRemaining}` : `戻す 残り${game.pendingScout.returnRemaining}`
+    );
     resultModal.classList.add("hidden");
   } else if (game.pendingScout) {
-    handHint.textContent = "相手が偵察を処理しています";
+    setHandHint("相手が偵察を処理しています", "相手が偵察中");
     resultModal.classList.add("hidden");
   } else if (game.pendingDraw?.playerId === snapshot.playerId) {
-    handHint.textContent = "引く山札を選んでください";
+    setHandHint("引く山札を選んでください", "山札選択");
     resultModal.classList.add("hidden");
   } else if (game.pendingDraw) {
-    handHint.textContent = "相手が山札を選んでいます";
+    setHandHint("相手が山札を選んでいます", "相手が選択中");
+    resultModal.classList.add("hidden");
+  } else if (game.lastAutoPass) {
+    setHandHint(game.lastAutoPass.message, "自動パス");
     resultModal.classList.add("hidden");
   } else if (game.lastAutoDraw?.playerId === snapshot.playerId) {
-    handHint.textContent = game.lastAutoDraw.message;
+    setHandHint(game.lastAutoDraw.message, "自動ドロー");
     resultModal.classList.add("hidden");
   } else if (game.lastAutoDraw) {
-    handHint.textContent = game.lastAutoDraw.message;
+    setHandHint(game.lastAutoDraw.message, "自動ドロー");
     resultModal.classList.add("hidden");
   } else if (game.currentPlayer === snapshot.playerId) {
-    handHint.textContent = state.selectedCardId ? "置きたい旗を選んでください" : "出すカードを選んでください";
+    setHandHint(
+      state.selectedCardId ? "置きたい旗を選んでください" : "出すカードを選んでください",
+      state.selectedCardId ? "旗を選択" : "カード選択"
+    );
     resultModal.classList.add("hidden");
   } else {
-    handHint.textContent = "相手の手番です";
+    setHandHint("相手の手番です", "相手の手番");
     resultModal.classList.add("hidden");
   }
   if (!game.winner && game.opponentInactive) {
-    handHint.textContent = `${otherName}の通信待ち`;
+    setHandHint(`${otherName}の通信待ち`, "通信待ち");
   }
   syncClaimFlash(game);
 
@@ -439,10 +461,16 @@ function renderTacticActionBar(gameState) {
   tacticActionBar.classList.remove("hidden");
   tacticActionText.textContent = tacticActionBarText(action, card);
   const hasSource = Boolean(card);
-  tacticMoveButton.classList.toggle("hidden", !hasSource || action.type !== "tactic-redeploy" || action.phase === "target");
-  tacticDiscardButton.classList.toggle("hidden", !hasSource || action.type !== "tactic-redeploy");
-  tacticMoveButton.disabled = !hasSource || action.type !== "tactic-redeploy" || action.phase === "target";
-  tacticDiscardButton.disabled = !hasSource || action.type !== "tactic-redeploy";
+  const choosingTarget = action.phase === "target";
+  const canMove = hasSource && !choosingTarget && (action.type === "tactic-redeploy" || action.type === "tactic-traitor");
+  const canDiscard = hasSource && !choosingTarget && (action.type === "tactic-redeploy" || action.type === "tactic-deserter");
+  tacticMoveButton.textContent = action.type === "tactic-traitor" ? "置き場所を選ぶ" : "移動先を選ぶ";
+  tacticDiscardButton.textContent = action.type === "tactic-deserter" ? "脱走させる" : "除外する";
+  tacticCancelButton.textContent = choosingTarget ? "選択をやめる" : "キャンセル";
+  tacticMoveButton.classList.toggle("hidden", !canMove);
+  tacticDiscardButton.classList.toggle("hidden", !canDiscard);
+  tacticMoveButton.disabled = !canMove;
+  tacticDiscardButton.disabled = !canDiscard;
 }
 
 function tacticActionBarText(action, card) {
@@ -452,7 +480,11 @@ function tacticActionBarText(action, card) {
     if (action.phase === "target") return `選択中: ${label}。移動先の旗を選んでください`;
     return `選択中: ${label}。移動するか、除外するか選んでください`;
   }
-  if (action.type === "tactic-traitor") return `選択中: ${label}。置きたい旗を選んでください`;
+  if (action.type === "tactic-traitor") {
+    if (action.phase === "target") return `選択中: ${label}。置き場所の旗を選んでください`;
+    return `選択中: ${label}。置き場所を選ぶか、キャンセルしてください`;
+  }
+  if (action.type === "tactic-deserter") return `選択中: ${label}。脱走させるか、キャンセルしてください`;
   return `選択中: ${label}`;
 }
 
@@ -502,12 +534,14 @@ function renderBoard(gameState, snapshot) {
       !gameState.pendingScout &&
       gameState.currentPlayer === playerId &&
       isFlagPlayableForSelection(flag, playerId);
-    const tacticTargeting = Boolean(state.pendingTacticAction);
-    flagButton.disabled = !playable && !tacticTargeting;
+    const tacticAction = state.pendingTacticAction;
+    const tacticBoardInteractive = tacticAction?.phase === "source" || tacticAction?.phase === "target";
+    flagButton.disabled = !playable && !tacticBoardInteractive;
     flagButton.classList.toggle("playable", playable && Boolean(state.selectedCardId));
-    flagButton.classList.toggle("tactic-targeting", tacticTargeting);
-    flagButton.classList.toggle("tactic-source-picking", state.pendingTacticAction?.phase === "source");
-    flagButton.classList.toggle("tactic-target-picking", state.pendingTacticAction?.phase === "target");
+    flagButton.classList.toggle("tactic-targeting", tacticAction?.phase === "target");
+    flagButton.classList.toggle("tactic-source-picking", tacticAction?.phase === "source");
+    flagButton.classList.toggle("tactic-choice-waiting", tacticAction?.phase === "choice");
+    flagButton.classList.toggle("tactic-target-picking", tacticAction?.phase === "target");
     flagButton.classList.toggle("tactic-target-ready", isTacticTargetReady(flag, index, playerId));
     flagButton.classList.toggle("claimed", Boolean(flag.owner));
     flagButton.classList.toggle("claimed-by-me", flag.owner === playerId);
@@ -529,7 +563,7 @@ function renderBoard(gameState, snapshot) {
       <div class="flag-marker">
         <i></i>
         ${renderFlagTactics(flag)}
-        ${flag.owner ? `<span>${escapeHtml(snapshot.players[flag.owner].name)} 獲得</span>` : ""}
+        ${flag.owner ? `<span><strong class="flag-owner-name">${escapeHtml(snapshot.players[flag.owner].name)}</strong><small>獲得</small></span>` : ""}
       </div>
       ${renderBattleLane(flag.cards[bottomPlayerId], flag.scores[bottomPlayerId], "bottom", flag.requiredCards, index, bottomPlayerId)}
     `;
@@ -574,20 +608,29 @@ async function handleTacticBoardClick(event, flagIndex) {
       cardIndex: Number(cardEl.dataset.cardIndex)
     };
     if (!validTacticSource(action.type, source)) return;
-    if (action.type === "tactic-deserter" && needsTapConfirmation() && !sameBoardSource(state.confirmTacticSource || {}, source)) {
-      state.confirmTacticSource = source;
-      render();
-      handHint.textContent = "このカードを脱走させるなら、同じカードをもう一度タップ";
+    const sourceCard = boardCardAt(source);
+    if (action.type === "tactic-deserter") {
+      if (needsTapConfirmation() && !window.confirm(`${cardShortName(sourceCard)} を脱走させますか？`)) return;
+      await playTacticAction({ cardId: action.cardId, source });
       return;
     }
-    if (action.type === "tactic-deserter") {
-      await playTacticAction({ cardId: action.cardId, source });
+    if (action.type === "tactic-traitor") {
+      if (needsTapConfirmation() && !window.confirm(`${cardShortName(sourceCard)} を裏切らせますか？`)) return;
+      state.pendingTacticAction = {
+        ...action,
+        source,
+        phase: "target"
+      };
+      state.confirmTacticSource = null;
+      state.confirmFlagIndex = null;
+      handHint.textContent = "置き場所の旗を選んでください";
+      render();
       return;
     }
     state.pendingTacticAction = {
       ...action,
       source,
-      phase: action.type === "tactic-redeploy" ? "choice" : "target"
+      phase: "choice"
     };
     state.confirmTacticSource = null;
     state.confirmFlagIndex = null;
@@ -638,14 +681,44 @@ function validTacticSource(type, source) {
 function renderReviewBanner(snapshot, gameState) {
   if (!gameState.winner) {
     reviewBanner.classList.add("hidden");
+    reviewBanner.classList.remove("restart-offer", "restart-waiting");
     return;
   }
 
   const won = gameState.winner === snapshot.playerId;
   const winnerName = snapshot.players[gameState.winner].name;
   reviewTitle.textContent = won ? "あなたの勝ち" : `${winnerName}の勝ち`;
-  reviewText.textContent = "盤面を確認してから結果画面を開けます";
+  reviewText.textContent = "盤面を確認してから再戦かロビーを選べます";
+  applyRestartReviewBannerState(snapshot, gameState, won, winnerName);
   reviewBanner.classList.remove("hidden");
+}
+
+function applyRestartReviewBannerState(snapshot, gameState, won, winnerName) {
+  const otherId = snapshot.playerId === "p1" ? "p2" : "p1";
+  const otherName = snapshot.players[otherId]?.name || "相手";
+  const voted = Boolean(gameState.restartVotes?.[snapshot.playerId]);
+  const otherVoted = Boolean(gameState.restartVotes?.[otherId]);
+
+  reviewBanner.classList.toggle("restart-offer", otherVoted && !voted);
+  reviewBanner.classList.toggle("restart-waiting", voted);
+
+  if (otherVoted && !voted) {
+    reviewTitle.textContent = "再戦希望が届いています";
+    reviewText.textContent = `${otherName}が再戦を希望しています`;
+    reviewResultButton.textContent = "返答する";
+    return;
+  }
+
+  if (voted) {
+    reviewTitle.textContent = "再戦待ち";
+    reviewText.textContent = `${otherName}の返答を待っています`;
+    reviewResultButton.textContent = "状況を見る";
+    return;
+  }
+
+  reviewTitle.textContent = won ? "あなたの勝ち" : `${winnerName}の勝ち`;
+  reviewText.textContent = "盤面を確認してから再戦かロビーを選べます";
+  reviewResultButton.textContent = "再戦・終了を選ぶ";
 }
 
 function renderResultModal(snapshot, gameState) {
@@ -691,6 +764,8 @@ function renderBattleLane(cards, score, side, requiredCards = 3, flagIndex = 0, 
 function boardCardClasses(card, flagIndex, playerId, cardIndex) {
   const action = state.pendingTacticAction;
   if (!action) return "";
+  const flag = state.snapshot?.game?.flags?.[flagIndex];
+  if (!flag || flag.owner) return "";
   const source = { flagIndex, playerId, cardIndex };
   const classes = [];
   if (action.source && sameBoardSource(action.source, source)) {
@@ -705,6 +780,8 @@ function boardCardClasses(card, flagIndex, playerId, cardIndex) {
 }
 
 function sourceMatchesTactic(type, source, card) {
+  const flag = state.snapshot?.game?.flags?.[source.flagIndex];
+  if (!flag || flag.owner) return false;
   const otherId = state.playerId === "p1" ? "p2" : "p1";
   if (type === "tactic-redeploy") return source.playerId === state.playerId && isBoardUnitCard(card);
   if (type === "tactic-deserter") return source.playerId === otherId && isBoardUnitCard(card);
@@ -891,22 +968,26 @@ function tacticTargetHint(tacticId, source) {
 
 function chooseTacticMove() {
   const action = state.pendingTacticAction;
-  if (!action || action.type !== "tactic-redeploy" || !action.source) return;
+  if (!action || !["tactic-redeploy", "tactic-traitor"].includes(action.type) || !action.source) return;
   state.pendingTacticAction = { ...action, phase: "target" };
-  handHint.textContent = tacticTargetHint(action.type, action.source).replace("移動するか、除外するか選んでください", "移動先の旗を選んでください");
+  handHint.textContent = action.type === "tactic-traitor"
+    ? "置き場所の旗を選んでください"
+    : "移動先の旗を選んでください";
   render();
 }
 
 async function discardSelectedTacticCard() {
   const action = state.pendingTacticAction;
-  if (!action || action.type !== "tactic-redeploy" || !action.source) return;
+  if (!action || !["tactic-redeploy", "tactic-deserter"].includes(action.type) || !action.source) return;
+  const card = boardCardAt(action.source);
+  if (action.type === "tactic-redeploy" && !window.confirm(`${cardShortName(card)} を除外しますか？`)) return;
   await playTacticAction({ cardId: action.cardId, source: action.source, action: "discard" });
 }
 
 function cancelTacticAction() {
   state.pendingTacticAction = null;
   state.selectedCardId = null;
-  handHint.textContent = "出すカードを選んでください";
+  setHandHint("出すカードを選んでください", "カード選択");
   render();
 }
 
@@ -916,6 +997,7 @@ function boardCardAt(source) {
 }
 
 function cardShortName(card) {
+  if (!card) return "このカード";
   if (card.type === "tactic") return card.name;
   return `${card.value}`;
 }
@@ -976,7 +1058,6 @@ function colorOrder(color) {
 
 function updateSortControls() {
   const buttons = {
-    original: sortOriginalButton,
     color: sortColorButton,
     value: sortValueButton
   };
@@ -1104,17 +1185,6 @@ async function returnScoutCard(cardId) {
   }
 }
 
-async function passTurn() {
-  try {
-    await api(`/api/rooms/${state.roomId}/pass`, { method: "POST", auth: true });
-    state.selectedCardId = null;
-    await refresh();
-  } catch (error) {
-    showError(error.message);
-    await refresh();
-  }
-}
-
 function cardMarkup(card, size, attrs = "", extraClass = "") {
   const baseClass = card.type === "tactic" ? `${size} game-card tactic-card` : `${size} game-card ${card.color}`;
   const cardClass = `${baseClass}${extraClass ? ` ${extraClass}` : ""}`;
@@ -1188,6 +1258,10 @@ function showError(message) {
   statusLabel.textContent = message;
 }
 
+function setHandHint(message, compactMessage = message) {
+  handHint.textContent = window.matchMedia("(max-width: 380px)").matches ? compactMessage : message;
+}
+
 function renderPlayerCards(snapshot, gameState) {
   p1Card.innerHTML = playerCardMarkup(snapshot, gameState, "p1");
   p2Card.innerHTML = playerCardMarkup(snapshot, gameState, "p2");
@@ -1200,9 +1274,11 @@ function playerCardMarkup(snapshot, gameState, playerId) {
   const turnLabel = playerId === snapshot.playerId ? "自分の手番" : "相手の手番";
   const tacticCount = gameState.usedTactics?.[playerId]?.length || 0;
   const turnRibbon = isTurn ? `<span class="turn-ribbon">${turnLabel}</span>` : "";
+  const opponentTroopCount = gameState.opponentHandBreakdown?.troop ?? 0;
+  const opponentTacticCount = gameState.opponentHandBreakdown?.tactic ?? 0;
   const handInfo = playerId === snapshot.playerId
     ? ""
-    : `<span class="opponent-hand-info">手札 部隊${gameState.opponentHandBreakdown?.troop ?? 0} / 戦術${gameState.opponentHandBreakdown?.tactic ?? 0}</span>`;
+    : `<span class="opponent-hand-info" title="手札 部隊${opponentTroopCount} / 戦術${opponentTacticCount}">手札 兵${opponentTroopCount}/策${opponentTacticCount}</span>`;
   return `
     ${turnRibbon}
     <span class="player-name"><span class="player-name-text">${escapeHtml(player.name)}</span><span class="player-tactics">使用戦術 ${tacticCount}</span>${handInfo}</span>

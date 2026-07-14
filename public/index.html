@@ -51,8 +51,7 @@
           <div class="top-actions">
             <button class="mobile-rule-button" id="ruleButton">ルール</button>
             <button id="logButton">ログ一覧</button>
-            <button id="passButton">パス</button>
-            <button id="surrenderButton">降参</button>
+            <button id="exitButton">退出</button>
           </div>
         </header>
 
@@ -96,12 +95,12 @@
           <div class="hand-stack">
             <div class="hand-head">
               <h2>あなたの手札</h2>
-              <p id="handHint">カードを選んで旗を押す</p>
+              <p id="handHint">カード選択</p>
               <div class="sort-controls" aria-label="手札の並び替え">
-                <button id="sortOriginalButton" type="button">元順</button>
                 <button id="sortColorButton" type="button">色順</button>
                 <button id="sortValueButton" type="button">数字順</button>
               </div>
+              <button class="hand-surrender-button" id="surrenderButton" type="button">降参</button>
             </div>
             <div class="tactic-action-bar hidden" id="tacticActionBar">
               <span id="tacticActionText">選択中</span>
@@ -116,7 +115,7 @@
                 <strong id="reviewTitle">決着</strong>
                 <span id="reviewText">盤面を確認できます</span>
               </div>
-              <button id="reviewResultButton" type="button">結果を見る</button>
+              <button id="reviewResultButton" type="button">再戦・終了を選ぶ</button>
             </div>
             <div class="hand" id="hand"></div>
           </div>
