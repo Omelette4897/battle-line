@@ -204,10 +204,26 @@ input.input-error {
 }
 
 .player-card {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
+  overflow: hidden;
+}
+
+.turn-ribbon {
+  position: absolute;
+  inset: 0 0 auto;
+  display: grid;
+  min-height: 18px;
+  place-items: center;
+  background: linear-gradient(90deg, rgba(216, 165, 58, 0.92), rgba(245, 219, 145, 0.82));
+  color: #17231d;
+  font-size: 0.62rem;
+  font-weight: 1000;
+  line-height: 1;
+  letter-spacing: 0;
 }
 
 .player-card .player-name {
@@ -290,6 +306,7 @@ input.input-error {
 
 .player-card.active {
   outline: 3px solid #e4b547;
+  padding-top: 24px;
   background: rgba(40, 69, 55, 0.9);
 }
 
@@ -382,6 +399,25 @@ input.input-error {
 .tactic-status span:nth-child(2) {
   color: #f5db91;
   text-align: center;
+}
+
+.turn-prompt {
+  display: none;
+  border: 1px solid rgba(245, 219, 145, 0.42);
+  border-radius: 999px;
+  padding: 4px 12px;
+  background: rgba(255, 248, 223, 0.09);
+  color: #ead9aa;
+  font-size: 0.78rem;
+  font-weight: 1000;
+  line-height: 1;
+}
+
+.turn-prompt.my-turn {
+  border-color: rgba(245, 219, 145, 0.72);
+  background: rgba(216, 165, 58, 0.22);
+  color: #fff2bf;
+  box-shadow: 0 0 18px rgba(245, 219, 145, 0.14);
 }
 
 .play-layout {
@@ -618,6 +654,14 @@ input.input-error {
 
 .flag.claim-flash {
   animation: claimPulse 1.35s ease-out;
+}
+
+.flag.tap-confirm-target {
+  border-color: rgba(255, 215, 109, 0.86);
+  box-shadow:
+    0 0 0 2px rgba(255, 215, 109, 0.22),
+    0 0 22px rgba(255, 215, 109, 0.2),
+    inset 0 0 0 2px rgba(255, 215, 109, 0.34);
 }
 
 @keyframes claimPulse {
@@ -879,6 +923,14 @@ input.input-error {
     0 0 0 2px rgba(72, 43, 28, 0.82),
     0 0 18px rgba(245, 219, 145, 0.52);
   transform: translateY(-1px);
+}
+
+.mini.tap-confirm-card {
+  outline: 3px solid #ffd76d;
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 2px rgba(72, 43, 28, 0.82),
+    0 0 18px rgba(255, 215, 109, 0.58);
 }
 
 .hand-panel {
@@ -1601,11 +1653,6 @@ input.input-error {
   font-weight: 900;
 }
 
-.tactic-rules span.implemented {
-  background: rgba(39, 92, 67, 0.15);
-  color: #275c43;
-}
-
 @media (max-width: 720px) {
   .app {
     padding: 8px;
@@ -1657,8 +1704,8 @@ input.input-error {
   .tactic-status {
     grid-template-columns: 1fr;
     justify-items: center;
-    gap: 4px;
-    font-size: 0.52rem;
+    gap: 5px;
+    font-size: 0.58rem;
     text-align: center;
   }
 
@@ -1667,6 +1714,11 @@ input.input-error {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .turn-prompt {
+    padding: 4px 10px;
+    font-size: 0.68rem;
   }
 
   .deck-back {
@@ -2019,7 +2071,7 @@ input.input-error {
   .player-card,
   .deck-card {
     min-width: 0;
-    min-height: 38px;
+    min-height: 42px;
     padding: 6px;
     border-radius: 6px;
   }
@@ -2029,12 +2081,21 @@ input.input-error {
     gap: 4px;
   }
 
+  .player-card.active {
+    padding-top: 21px;
+  }
+
+  .turn-ribbon {
+    min-height: 15px;
+    font-size: 0.56rem;
+  }
+
   .player-card .player-name {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: flex-start;
-    gap: 2px 4px;
+    gap: 3px 4px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: normal;
@@ -2042,8 +2103,10 @@ input.input-error {
 
   .player-name-text {
     display: block;
-    flex: 0 1 auto;
-    max-width: calc(100% - 58px);
+    flex: 0 0 100%;
+    max-width: 100%;
+    font-size: 0.76rem;
+    line-height: 1.08;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2063,7 +2126,8 @@ input.input-error {
     flex: 0 0 100%;
     max-width: 100%;
     padding: 1px 3px;
-    font-size: 0.46rem;
+    font-size: 0.58rem;
+    line-height: 1.1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2073,25 +2137,26 @@ input.input-error {
     flex: 0 0 100%;
     max-width: 100%;
     padding: 1px 3px;
-    font-size: 0.46rem;
+    font-size: 0.58rem;
+    line-height: 1.1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .player-flags {
-    min-width: 44px;
-    min-height: 24px;
+    min-width: 46px;
+    min-height: 27px;
     padding: 2px 5px;
     border-radius: 6px;
   }
 
   .player-flags strong {
-    font-size: 0.72rem;
+    font-size: 0.92rem;
   }
 
   .player-flags small {
-    font-size: 0.54rem;
+    font-size: 0.58rem;
   }
 
   .deck-card {
@@ -2106,6 +2171,45 @@ input.input-error {
 
   .deck-card strong {
     font-size: 0.82rem;
+  }
+
+  @media (min-width: 390px) {
+    .player-card,
+    .deck-card {
+      min-height: 45px;
+      padding: 7px;
+    }
+
+    .player-card.active {
+      padding-top: 22px;
+    }
+
+    .turn-ribbon {
+      min-height: 16px;
+      font-size: 0.6rem;
+    }
+
+    .player-name-text {
+      font-size: 0.84rem;
+    }
+
+    .player-tactics,
+    .opponent-hand-info {
+      font-size: 0.64rem;
+    }
+
+    .player-flags {
+      min-width: 50px;
+      min-height: 29px;
+    }
+
+    .player-flags strong {
+      font-size: 1rem;
+    }
+
+    .player-flags small {
+      font-size: 0.62rem;
+    }
   }
 
   .deck-back {

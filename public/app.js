@@ -12,7 +12,9 @@ const state = {
   claimFlashFlags: [],
   tacticModalCardId: null,
   pendingTacticAction: null,
-  resultModalOpen: false
+  resultModalOpen: false,
+  confirmFlagIndex: null,
+  confirmTacticSource: null
 };
 
 const lobby = document.querySelector("#lobby");
@@ -50,6 +52,7 @@ const troopDeckButton = document.querySelector("#troopDeckButton");
 const tacticDeckButton = document.querySelector("#tacticDeckButton");
 const p1Tactics = document.querySelector("#p1Tactics");
 const p2Tactics = document.querySelector("#p2Tactics");
+const turnPrompt = document.querySelector("#turnPrompt");
 const drawPrompt = document.querySelector("#drawPrompt");
 const waitingPanel = document.querySelector("#waitingPanel");
 const waitingRoomId = document.querySelector("#waitingRoomId");
@@ -336,6 +339,7 @@ function render() {
   tacticDeckButton.classList.toggle("empty-deck", game.tacticDeckCount === 0);
   renderDrawControls(game);
   renderTacticStatus(snapshot, game);
+  renderTurnPrompt(snapshot, game);
   renderPlayerCards(snapshot, game);
   renderBoardLabels(snapshot);
   surrenderButton.disabled = Boolean(game.winner);
@@ -404,7 +408,19 @@ function renderDrawControls(gameState) {
     ? "引く山札を選んでください"
     : gameState.pendingDraw
       ? "相手が山札を選んでいます"
-      : "カード配置後に山札を選択";
+    : "カード配置後に山札を選択";
+}
+
+function renderTurnPrompt(snapshot, gameState) {
+  if (gameState.winner) {
+    turnPrompt.textContent = gameState.winner === snapshot.playerId ? "あなたの勝ち" : "相手の勝ち";
+    turnPrompt.classList.toggle("my-turn", gameState.winner === snapshot.playerId);
+    return;
+  }
+  const currentName = snapshot.players[gameState.currentPlayer]?.name || "プレイヤー";
+  const isMyTurn = gameState.currentPlayer === snapshot.playerId;
+  turnPrompt.textContent = isMyTurn ? "自分の手番" : `${currentName}の手番`;
+  turnPrompt.classList.toggle("my-turn", isMyTurn);
 }
 
 function renderTacticStatus(snapshot, gameState) {
@@ -497,6 +513,7 @@ function renderBoard(gameState, snapshot) {
     flagButton.classList.toggle("claimed-by-me", flag.owner === playerId);
     flagButton.classList.toggle("claimed-by-other", Boolean(flag.owner) && flag.owner !== playerId);
     flagButton.classList.toggle("claim-flash", state.claimFlashFlags.includes(index));
+    flagButton.classList.toggle("tap-confirm-target", state.confirmFlagIndex === index && Boolean(state.selectedCardId));
     flagButton.classList.toggle("has-fog", flag.tactics?.some((tactic) => tactic.id === "tactic-fog"));
     flagButton.classList.toggle("has-mud", flag.tactics?.some((tactic) => tactic.id === "tactic-mud"));
     flagButton.addEventListener("click", (event) => {
@@ -557,6 +574,12 @@ async function handleTacticBoardClick(event, flagIndex) {
       cardIndex: Number(cardEl.dataset.cardIndex)
     };
     if (!validTacticSource(action.type, source)) return;
+    if (action.type === "tactic-deserter" && needsTapConfirmation() && !sameBoardSource(state.confirmTacticSource || {}, source)) {
+      state.confirmTacticSource = source;
+      render();
+      handHint.textContent = "このカードを脱走させるなら、同じカードをもう一度タップ";
+      return;
+    }
     if (action.type === "tactic-deserter") {
       await playTacticAction({ cardId: action.cardId, source });
       return;
@@ -566,6 +589,8 @@ async function handleTacticBoardClick(event, flagIndex) {
       source,
       phase: action.type === "tactic-redeploy" ? "choice" : "target"
     };
+    state.confirmTacticSource = null;
+    state.confirmFlagIndex = null;
     handHint.textContent = tacticTargetHint(action.type, source);
     render();
     return;
@@ -576,6 +601,12 @@ async function handleTacticBoardClick(event, flagIndex) {
   }
 
   if (action.phase === "target") {
+    if (needsTapConfirmation() && state.confirmFlagIndex !== flagIndex) {
+      state.confirmFlagIndex = flagIndex;
+      render();
+      handHint.textContent = "この旗を移動先にするなら、同じ旗をもう一度タップ";
+      return;
+    }
     await playTacticAction({ cardId: action.cardId, source: action.source, targetFlagIndex: flagIndex, action: "move" });
   }
 }
@@ -667,6 +698,9 @@ function boardCardClasses(card, flagIndex, playerId, cardIndex) {
   } else if (action.phase === "source" && sourceMatchesTactic(action.type, source, card)) {
     classes.push("tactic-source-candidate");
   }
+  if (state.confirmTacticSource && sameBoardSource(state.confirmTacticSource, source)) {
+    classes.push("tap-confirm-card");
+  }
   return classes.join(" ");
 }
 
@@ -726,6 +760,7 @@ function renderHand(gameState) {
         return;
       }
       state.selectedCardId = state.selectedCardId === card.id ? null : card.id;
+      state.confirmFlagIndex = null;
       render();
     });
     hand.appendChild(button);
@@ -771,11 +806,15 @@ async function useTacticFromModal() {
   if (["tactic-redeploy", "tactic-deserter", "tactic-traitor"].includes(card.id)) {
     state.pendingTacticAction = { cardId: card.id, type: card.id, phase: "source" };
     state.selectedCardId = null;
+    state.confirmFlagIndex = null;
+    state.confirmTacticSource = null;
     handHint.textContent = tacticActionHint(card.id);
     render();
     return;
   }
   state.selectedCardId = card.id;
+  state.confirmFlagIndex = null;
+  state.confirmTacticSource = null;
   handHint.textContent = isMoraleTactic(card) ? "士気カードを置く旗を選んでください" : "戦術カードを置く旗を選んでください";
   render();
 }
@@ -961,7 +1000,17 @@ async function playSelected(flagIndex) {
     showError("先にカードを選んでください");
     return;
   }
+  if (needsTapConfirmation() && state.confirmFlagIndex !== flagIndex) {
+    state.confirmFlagIndex = flagIndex;
+    render();
+    handHint.textContent = "この旗に置くなら、同じ旗をもう一度タップ";
+    return;
+  }
   await playCard(state.selectedCardId, flagIndex);
+}
+
+function needsTapConfirmation() {
+  return window.matchMedia("(hover: none), (pointer: coarse)").matches;
 }
 
 async function playCard(cardId, flagIndex) {
@@ -972,8 +1021,10 @@ async function playCard(cardId, flagIndex) {
       body: { cardId, flagIndex }
     });
     state.selectedCardId = null;
+    state.confirmFlagIndex = null;
     await refresh();
   } catch (error) {
+    state.confirmFlagIndex = null;
     showError(error.message);
     await refresh();
   }
@@ -988,8 +1039,12 @@ async function playTacticAction(payload) {
     });
     state.pendingTacticAction = null;
     state.selectedCardId = null;
+    state.confirmFlagIndex = null;
+    state.confirmTacticSource = null;
     await refresh();
   } catch (error) {
+    state.confirmFlagIndex = null;
+    state.confirmTacticSource = null;
     showError(error.message);
     await refresh();
   }
@@ -1144,11 +1199,13 @@ function playerCardMarkup(snapshot, gameState, playerId) {
   const isTurn = gameState.currentPlayer === playerId && !gameState.winner;
   const turnLabel = playerId === snapshot.playerId ? "自分の手番" : "相手の手番";
   const tacticCount = gameState.usedTactics?.[playerId]?.length || 0;
+  const turnRibbon = isTurn ? `<span class="turn-ribbon">${turnLabel}</span>` : "";
   const handInfo = playerId === snapshot.playerId
     ? ""
     : `<span class="opponent-hand-info">手札 部隊${gameState.opponentHandBreakdown?.troop ?? 0} / 戦術${gameState.opponentHandBreakdown?.tactic ?? 0}</span>`;
   return `
-    <span class="player-name"><span class="player-name-text">${escapeHtml(player.name)}</span>${isTurn ? `<em>${turnLabel}</em>` : ""}<span class="player-tactics">使用戦術 ${tacticCount}</span>${handInfo}</span>
+    ${turnRibbon}
+    <span class="player-name"><span class="player-name-text">${escapeHtml(player.name)}</span><span class="player-tactics">使用戦術 ${tacticCount}</span>${handInfo}</span>
     <span class="player-flags" aria-label="獲得旗数">
       <small>獲得旗</small><strong>${count}</strong>
     </span>
