@@ -184,7 +184,7 @@ async function restartGame() {
   try {
     await api(`/api/rooms/${state.roomId}/restart`, { method: "POST", auth: true });
     state.selectedCardId = null;
-    state.resultModalOpen = false;
+    state.resultModalOpen = true;
     await refresh();
   } catch (error) {
     await returnToLobby({
