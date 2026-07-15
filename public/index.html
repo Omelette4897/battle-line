@@ -17,7 +17,7 @@
           <div class="lobby-form">
             <label>
               名前
-              <input id="nameInput" maxlength="20" placeholder="あなたの名前" required />
+              <input id="nameInput" maxlength="10" placeholder="あなたの名前" required />
             </label>
             <label>
               部屋ID
@@ -51,7 +51,7 @@
           <div class="top-actions">
             <button class="mobile-rule-button" id="ruleButton">ルール</button>
             <button id="logButton">ログ一覧</button>
-            <button id="exitButton">退出</button>
+            <button id="surrenderButton" type="button">降参</button>
           </div>
         </header>
 
@@ -70,6 +70,7 @@
             </button>
           </div>
           <div class="player-card" id="p2Card">Player 2</div>
+          <span class="opponent-action-prompt" id="opponentActionPrompt">相手の行動: まだありません</span>
         </div>
         <div class="tactic-status" id="tacticStatus">
           <span id="p1Tactics">戦術 0</span>
@@ -81,12 +82,9 @@
         <div class="play-layout" id="playLayout">
           <section class="battlefield">
             <div class="board-shell">
-              <div class="board-labels" aria-hidden="true">
-                <span id="boardOpponentLabel">相手</span>
-                <span>旗</span>
-                <span id="boardYouLabel">あなた</span>
-              </div>
+              <div class="side-bar opponent-side-bar" id="boardOpponentLabel">相手側</div>
               <div class="board" id="board"></div>
+              <div class="side-bar you-side-bar" id="boardYouLabel">自分側</div>
             </div>
           </section>
         </div>
@@ -97,10 +95,8 @@
               <h2>あなたの手札</h2>
               <p id="handHint">カード選択</p>
               <div class="sort-controls" aria-label="手札の並び替え">
-                <button id="sortColorButton" type="button">色順</button>
-                <button id="sortValueButton" type="button">数字順</button>
+                <button id="sortButton" type="button">並替</button>
               </div>
-              <button class="hand-surrender-button" id="surrenderButton" type="button">降参</button>
             </div>
             <div class="tactic-action-bar hidden" id="tacticActionBar">
               <span id="tacticActionText">選択中</span>

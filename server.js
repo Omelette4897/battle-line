@@ -10,6 +10,7 @@ const rooms = new Map();
 const ROOM_TTL_MS = 6 * 60 * 60 * 1000;
 const ROOM_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 const PLAYER_INACTIVE_MS = 15 * 1000;
+const MAX_PLAYER_NAME_LENGTH = 10;
 
 const COLORS = ["red", "blue", "green", "yellow", "purple", "gray"];
 const COLOR_NAMES = {
@@ -100,6 +101,7 @@ function createGame(room) {
       p2: draw(troopDeck, HAND_SIZE)
     },
     usedTactics: { p1: [], p2: [] },
+    lastTacticPlayer: null,
     flags: Array.from({ length: FLAG_COUNT }, () => ({
       owner: null,
       cards: { p1: [], p2: [] },
@@ -159,8 +161,8 @@ function normalizePlayerName(name) {
   if (!normalized) {
     throw statusError(400, "名前を入力してください");
   }
-  if (normalized.length > 20) {
-    throw statusError(400, "名前は20文字以内で入力してください");
+  if (normalized.length > MAX_PLAYER_NAME_LENGTH) {
+    throw statusError(400, `名前は${MAX_PLAYER_NAME_LENGTH}文字以内で入力してください`);
   }
   return normalized;
 }
@@ -267,7 +269,7 @@ function playTacticCard(room, playerId, cardIndex, flagIndex, options = {}) {
       throw statusError(400, "偵察に必要な3枚を引ける山札が残っていません");
     }
     hand.splice(cardIndex, 1);
-    game.usedTactics[playerId].push(card);
+    recordTacticUse(game, playerId, card);
     game.playCount += 1;
     game.pendingScout = { playerId, drawRemaining: 3, returnRemaining: 2, drawnCardIds: [] };
     game.log.push(`${playerName(room, playerId)} が偵察を使用`);
@@ -291,7 +293,7 @@ function playTacticCard(room, playerId, cardIndex, flagIndex, options = {}) {
 
   hand.splice(cardIndex, 1);
   flag.tactics.push({ ...card, playedBy: playerId });
-  game.usedTactics[playerId].push(card);
+  recordTacticUse(game, playerId, card);
   game.playCount += 1;
   game.log.push(`${playerName(room, playerId)} が旗${flagIndex + 1}に ${card.name} を配置`);
 
@@ -333,7 +335,7 @@ function playMoraleCard(room, playerId, cardIndex, flagIndex) {
 
   hand.splice(cardIndex, 1);
   flag.cards[playerId].push(card);
-  game.usedTactics[playerId].push(card);
+  recordTacticUse(game, playerId, card);
   game.playCount += 1;
   refreshCompletedAt(flag, game.playCount);
   game.log.push(`${playerName(room, playerId)} が旗${flagIndex + 1}に ${card.name} を配置`);
@@ -389,7 +391,7 @@ function playGuileCard(room, playerId, cardIndex, options) {
   }
 
   hand.splice(cardIndex, 1);
-  game.usedTactics[playerId].push(card);
+  recordTacticUse(game, playerId, card);
   game.playCount += 1;
   refreshAllCompletedAt(game);
   finishActionAfterBoardChange(game, playerId, room);
@@ -528,7 +530,7 @@ function scoutReturn(room, playerId, cardId) {
   const deck = card.type === "tactic" ? game.tacticDeck : game.troopDeck;
   deck.unshift(card);
   game.pendingScout.returnRemaining -= 1;
-  game.log.push(`${playerName(room, playerId)} が偵察で ${cardLabel(card)} を山札に戻した`);
+  game.log.push(`${playerName(room, playerId)} が偵察でカードを1枚山札に戻した`);
 
   if (game.pendingScout.returnRemaining === 0) {
     game.pendingScout = null;
@@ -570,7 +572,12 @@ function hasDrawableDeck(game) {
 function canUseTactic(game, playerId) {
   const ownUsed = game.usedTactics?.[playerId] || [];
   const otherUsed = game.usedTactics?.[opponent(playerId)] || [];
-  return ownUsed.length <= otherUsed.length;
+  return ownUsed.length <= otherUsed.length && game.lastTacticPlayer !== playerId;
+}
+
+function recordTacticUse(game, playerId, card) {
+  game.usedTactics[playerId].push(card);
+  game.lastTacticPlayer = playerId;
 }
 
 function canPass(game, playerId) {
