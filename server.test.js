@@ -57,6 +57,7 @@ function roomWithGame(gameOverrides = {}) {
     tacticDeck: [],
     hands: { p1: [], p2: [] },
     usedTactics: { p1: [], p2: [] },
+    lastTacticPlayer: null,
     flags: flags(),
     currentPlayer: "p1",
     winner: null,
@@ -198,6 +199,15 @@ test("room creation waits for the second player and then starts a game", () => {
   assert.ok(["p1", "p2"].includes(room.game.currentPlayer));
 });
 
+test("player names are limited to ten characters", () => {
+  const room = createRoom();
+
+  assert.throws(
+    () => joinRoom(room, "12345678901"),
+    /10/
+  );
+});
+
 test("normal play waits for deck choice before changing turns", () => {
   const room = roomWithGame({
     troopDeck: [troop("red", 2)],
@@ -245,6 +255,31 @@ test("both players can use the first tactic while counts are tied", () => {
   assert.equal(room.game.usedTactics.p1.length, 1);
 });
 
+test("same player cannot use tactics on consecutive tactic plays", () => {
+  const room = roomWithGame({
+    hands: {
+      p1: [environmentTactic("tactic-fog", "Fog"), environmentTactic("tactic-mud", "Mud")],
+      p2: [environmentTactic("tactic-mud", "Mud")]
+    },
+    tacticDeck: [environmentTactic("tactic-scout", "Scout")],
+    currentPlayer: "p1",
+    tacticDeckEmptyLogged: false
+  });
+
+  playCard(room, "p1", "tactic-fog", 0);
+
+  assert.equal(canUseTactic(room.game, "p1"), false);
+
+  room.game.currentPlayer = "p1";
+  assert.throws(() => playCard(room, "p1", "tactic-mud", 1), (error) => {
+    assertStatus(error, 400);
+    return true;
+  });
+
+  room.game.currentPlayer = "p2";
+  assert.equal(canUseTactic(room.game, "p2"), true);
+});
+
 test("mud requires four cards per side before judging the flag", () => {
   const mudFlag = flag({
     cards: {
@@ -269,6 +304,50 @@ test("mud requires four cards per side before judging the flag", () => {
   assert.equal(room.game.flags[0].owner, "p2");
 });
 
+test("mud proof waits until my side has four cards even with a leader", () => {
+  const testFlags = flags();
+  testFlags[0] = flag({
+    cards: {
+      p1: [troop("red", 7), troop("blue", 9), tactic("tactic-darius", "Darius")],
+      p2: [troop("red", 1), troop("blue", 4), troop("green", 8), troop("yellow", 4)]
+    },
+    completedAt: { p1: null, p2: 4 },
+    tactics: [environmentTactic("tactic-mud", "Mud")]
+  });
+  const room = roomWithGame({
+    flags: testFlags,
+    hands: { p1: [], p2: [] },
+    currentPlayer: "p1",
+    playCount: 4
+  });
+
+  advanceAfterAction(room.game, "p2", room);
+
+  assert.equal(room.game.flags[0].owner, null);
+});
+
+test("mud proof works after my fourth card completes a leader formation", () => {
+  const testFlags = flags();
+  testFlags[0] = flag({
+    cards: {
+      p1: [troop("red", 7), troop("blue", 9), tactic("tactic-darius", "Darius")],
+      p2: [troop("red", 1), troop("blue", 4), troop("green", 8), troop("yellow", 4)]
+    },
+    completedAt: { p1: null, p2: 4 },
+    tactics: [environmentTactic("tactic-mud", "Mud")]
+  });
+  const room = roomWithGame({
+    flags: testFlags,
+    hands: { p1: [troop("gray", 1)], p2: [] },
+    currentPlayer: "p1",
+    playCount: 4
+  });
+
+  playCard(room, "p1", "gray-1", 0);
+
+  assert.equal(room.game.flags[0].owner, "p1");
+});
+
 test("fog makes a completed flag compare sums instead of formations", () => {
   const fogFlag = flag({
     cards: {
@@ -290,6 +369,29 @@ test("fog makes a completed flag compare sums instead of formations", () => {
   playCard(room, "p2", "red-3", 0);
 
   assert.equal(room.game.flags[0].owner, "p1");
+});
+
+test("playing fog can immediately prove a completed flag by sum", () => {
+  const testFlags = flags();
+  testFlags[0] = flag({
+    cards: {
+      p1: [troop("blue", 10), troop("green", 9), troop("yellow", 8)],
+      p2: [troop("red", 1), troop("red", 2)]
+    },
+    completedAt: { p1: 1, p2: null }
+  });
+  const room = roomWithGame({
+    flags: testFlags,
+    hands: { p1: [environmentTactic("tactic-fog", "Fog")], p2: [] },
+    currentPlayer: "p1",
+    playCount: 1
+  });
+
+  playCard(room, "p1", "tactic-fog", 0);
+
+  assert.equal(room.game.flags[0].owner, "p1");
+  assert.equal(room.game.lastClaimEvents[0].owner, "p1");
+  assert.equal(room.game.lastClaimEvents[0].type, "proven");
 });
 
 test("scout draws three cards, returns two, and skips normal draw", () => {
@@ -325,6 +427,8 @@ test("scout draws three cards, returns two, and skips normal draw", () => {
   assert.equal(room.game.currentPlayer, "p1");
   assert.equal(room.game.lastAutoPass.playerId, "p2");
   assert.equal(room.game.hands.p1.length, 1);
+  assert.equal(room.game.log.filter((entry) => entry.includes("偵察でカードを1枚山札に戻した")).length, 2);
+  assert.equal(room.game.log.some((entry) => entry.includes(first.id) || entry.includes(second.id)), false);
 });
 
 test("second leader is rejected even when tactic count allows a tactic", () => {
