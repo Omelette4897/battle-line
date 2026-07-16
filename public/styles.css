@@ -3415,16 +3415,28 @@ input.input-error {
   .player-name-text {
     display: inline-flex;
     align-items: baseline;
+    flex-wrap: wrap;
     flex: 0 1 100%;
     max-width: 100%;
     font-size: 0.76rem;
     line-height: 1.08;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .player-name-core {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .player-name-you {
+    flex: 0 0 auto;
     font-size: 0.72em;
   }
 
