@@ -159,36 +159,47 @@
               <button id="closeRuleButton" aria-label="ルールを閉じる">閉じる</button>
             </div>
             <div class="rule-reference">
-              <p>手札から1枚選んで旗へ配置。旗は各3枚まで。両者3枚、または相手が逆転不能なら獲得。5旗か連続3旗で勝利。</p>
-              <p>片方が3枚完成し、場に見えているカードだけで相手が上回れないと分かる場合、その旗を獲得します。獲得できる旗が複数ある場合は、カードを置いた直後にまとめて判定します。</p>
-              <p>同じ役・同じ合計値の場合は、先に3枚を完成させたプレイヤーがその旗を獲得します。</p>
+              <h3>ゲームの流れ</h3>
+              <p>自分の手番では、手札から部隊カードか戦術カードを1枚使います。部隊カードと士気カードは、いずれかのフラッグ列に配置します。</p>
+              <p>カードを配置した直後に、そのフラッグを獲得できるか判定します。獲得がなければ、部隊山札か戦術山札から1枚引いて相手の手番になります。</p>
+              <p>山札のどちらかが空の場合は、引ける山札から自動で引きます。どちらの山札も引けない場合は、そのまま相手の手番に移ります。</p>
+
+              <h3>部隊カードとフラッグ獲得</h3>
+              <p>通常のフラッグは、各プレイヤーが3枚までカードを置けます。泥濘があるフラッグだけ、各プレイヤー4枚まで置けます。</p>
+              <p>両者が必要枚数を置いたら、役の強さと合計値で勝敗を決めます。同じ役で合計値も同じなら、先に必要枚数を完成させた側が獲得します。</p>
+              <p>相手がまだ必要枚数を置いていなくても、公開情報だけで相手が逆転できないと分かる場合は、その時点でフラッグを獲得します。</p>
+
+              <h3>勝利条件</h3>
+              <p>先に5本のフラッグを獲得するか、隣り合う3本のフラッグを連続で獲得したプレイヤーの勝利です。</p>
+
               <h3>役の強さ</h3>
               <ol class="formation-list">
-                <li><span class="formation-name">1. ウェッジ</span><span class="formation-copy">同色連番</span><span class="formation-cards"><i class="sample-card red">4</i><i class="sample-card red">5</i><i class="sample-card red">6</i></span></li>
+                <li><span class="formation-name">1. ウェッジ</span><span class="formation-copy">同じ色の連番</span><span class="formation-cards"><i class="sample-card red">4</i><i class="sample-card red">5</i><i class="sample-card red">6</i></span></li>
                 <li><span class="formation-name">2. ファランクス</span><span class="formation-copy">同じ数字</span><span class="formation-cards"><i class="sample-card green">8</i><i class="sample-card yellow">8</i><i class="sample-card purple">8</i></span></li>
                 <li><span class="formation-name">3. バタリオン</span><span class="formation-copy">同じ色</span><span class="formation-cards"><i class="sample-card blue">1</i><i class="sample-card blue">6</i><i class="sample-card blue">9</i></span></li>
-                <li><span class="formation-name">4. スカーミッシャー</span><span class="formation-copy">連番</span><span class="formation-cards"><i class="sample-card red">2</i><i class="sample-card green">3</i><i class="sample-card gray">4</i></span></li>
-                <li><span class="formation-name">5. ホスト</span><span class="formation-copy">合計値</span><span class="formation-cards"><i class="sample-card yellow">1</i><i class="sample-card purple">5</i><i class="sample-card blue">9</i></span></li>
+                <li><span class="formation-name">4. スカーミッシャー</span><span class="formation-copy">数字の連番</span><span class="formation-cards"><i class="sample-card red">2</i><i class="sample-card green">3</i><i class="sample-card gray">4</i></span></li>
+                <li><span class="formation-name">5. ホスト</span><span class="formation-copy">上記以外。合計値で勝負</span><span class="formation-cards"><i class="sample-card yellow">1</i><i class="sample-card purple">5</i><i class="sample-card blue">9</i></span></li>
               </ol>
+
               <h3>戦術カード</h3>
               <div class="tactic-rules">
                 <section>
-                  <h4>士気高揚</h4>
-                  <p><strong>アレクサンドロス / ダリウス</strong>フラッグ獲得時に好きな色と数字として扱うリーダー。各プレイヤー1枚まで。</p>
-                  <p><strong>援軍騎兵</strong>フラッグ獲得時に好きな色の8として扱う。</p>
-                  <p><strong>盾</strong>フラッグ獲得時に好きな色の1、2、3のいずれかとして扱う。</p>
+                  <h4>士気カード</h4>
+                  <p><strong>アレクサンドロス / ダリウス</strong>フラッグ獲得時に、好きな色と数字として扱えるリーダーです。リーダーは各プレイヤー1枚まで使えます。</p>
+                  <p><strong>援軍騎兵</strong>フラッグ獲得時に、好きな色の8として扱います。</p>
+                  <p><strong>盾</strong>フラッグ獲得時に、好きな色の1、2、3のいずれかとして扱います。</p>
                 </section>
                 <section>
-                  <h4>環境</h4>
-                  <p><strong>霧</strong>その旗は役を無視し、配置カードの合計値で勝負する。</p>
-                  <p><strong>泥濘</strong>その旗は4枚でフォーメーションを作る。</p>
+                  <h4>環境カード</h4>
+                  <p><strong>霧</strong>そのフラッグでは役を無視し、配置カードの合計値だけで勝敗を決めます。</p>
+                  <p><strong>泥濘</strong>そのフラッグでは、必要枚数が3枚から4枚になります。</p>
                 </section>
                 <section>
-                  <h4>謀略</h4>
-                  <p><strong>偵察</strong>山札から合計3枚引き、手札から2枚を対応する山札の上に戻す。このターンの通常ドローはない。</p>
-                  <p><strong>配置転換</strong>自分の未獲得旗上の部隊カードまたは士気カードを、別の空き枠へ移すか除外する。</p>
-                  <p><strong>脱走</strong>相手の未獲得旗上の部隊カードまたは士気カードを1枚除外する。</p>
-                  <p><strong>裏切り</strong>相手の未獲得旗上の部隊カード1枚を、自分側の空き枠へ移す。</p>
+                  <h4>謀略カード</h4>
+                  <p><strong>偵察</strong>山札から合計3枚引き、手札から2枚を対応する山札の上に戻します。このターンの通常ドローはありません。</p>
+                  <p><strong>配置転換</strong>自分の未獲得フラッグ上の部隊カードか士気カードを、別の空き枠へ移動するか除外します。</p>
+                  <p><strong>脱走</strong>相手の未獲得フラッグ上の部隊カードか士気カードを1枚除外します。</p>
+                  <p><strong>裏切り</strong>相手の未獲得フラッグ上の部隊カード1枚を、自分側の空き枠へ移動します。</p>
                 </section>
               </div>
             </div>

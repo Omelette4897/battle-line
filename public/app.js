@@ -14,7 +14,8 @@ const state = {
   pendingTacticAction: null,
   resultModalOpen: false,
   confirmFlagIndex: null,
-  confirmTacticSource: null
+  confirmTacticSource: null,
+  viewportLock: null
 };
 
 const MAX_PLAYER_NAME_LENGTH = 10;
@@ -81,6 +82,7 @@ const log = document.querySelector("#log");
 const logDrawer = document.querySelector("#logDrawer");
 const opponentActionPrompt = document.querySelector("#opponentActionPrompt");
 const ruleDrawer = document.querySelector("#ruleDrawer");
+let drawerScrollY = 0;
 
 createRoomButton.addEventListener("click", async () => {
   const name = requireName();
@@ -144,11 +146,66 @@ tacticCloseButton.addEventListener("click", () => closeTacticModal());
 tacticUseButton.addEventListener("click", async () => useTacticFromModal());
 
 sortButton.addEventListener("click", () => toggleHandSort());
-troopDeckButton.addEventListener("click", () => handleDeckClick("troop"));
-tacticDeckButton.addEventListener("click", () => handleDeckClick("tactic"));
-tacticMoveButton.addEventListener("click", () => chooseTacticMove());
-tacticDiscardButton.addEventListener("click", () => discardSelectedTacticCard());
-tacticCancelButton.addEventListener("click", () => cancelTacticAction());
+troopDeckButton.addEventListener("click", () => {
+  clearActiveFocus();
+  handleDeckClick("troop");
+});
+tacticDeckButton.addEventListener("click", () => {
+  clearActiveFocus();
+  handleDeckClick("tactic");
+});
+tacticMoveButton.addEventListener("click", () => {
+  clearActiveFocus();
+  chooseTacticMove();
+});
+tacticDiscardButton.addEventListener("click", () => {
+  clearActiveFocus();
+  discardSelectedTacticCard();
+});
+tacticCancelButton.addEventListener("click", () => {
+  clearActiveFocus();
+  cancelTacticAction();
+});
+
+function clearActiveFocus() {
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur();
+  }
+}
+
+function lockViewport() {
+  state.viewportLock = {
+    x: window.scrollX,
+    y: window.scrollY,
+    expiresAt: Date.now() + 1800
+  };
+}
+
+function restoreLockedViewport() {
+  const lock = state.viewportLock;
+  if (!lock) return;
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      if (state.viewportLock !== lock) return;
+      if (Date.now() > lock.expiresAt) {
+        state.viewportLock = null;
+        return;
+      }
+      const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      const maxX = Math.max(0, document.documentElement.scrollWidth - window.innerWidth);
+      window.scrollTo(Math.min(lock.x, maxX), Math.min(lock.y, maxY));
+      state.viewportLock = null;
+    });
+  });
+}
+
+function shouldLockViewportForUpdate(previousGame, nextGame) {
+  if (!previousGame || !nextGame) return false;
+  if (previousGame.currentPlayer !== nextGame.currentPlayer) return true;
+  if ((previousGame.pendingDraw?.playerId || "") !== (nextGame.pendingDraw?.playerId || "")) return true;
+  if ((previousGame.pendingScout?.playerId || "") !== (nextGame.pendingScout?.playerId || "")) return true;
+  return false;
+}
 
 function setHandSort(mode) {
   state.handSort = mode;
@@ -207,31 +264,37 @@ async function returnToLobby({ notifyServer = true, message = "" } = {}) {
 }
 
 logButton.addEventListener("click", () => {
-  logDrawer.classList.remove("hidden");
+  openDrawer(logDrawer);
 });
 
 ruleButton.addEventListener("click", () => {
-  ruleDrawer.classList.remove("hidden");
+  openDrawer(ruleDrawer);
 });
 
 closeLogButton.addEventListener("click", () => {
-  logDrawer.classList.add("hidden");
+  closeDrawer(logDrawer);
 });
 
 closeRuleButton.addEventListener("click", () => {
-  ruleDrawer.classList.add("hidden");
+  closeDrawer(ruleDrawer);
 });
 
 logDrawer.addEventListener("click", (event) => {
   if (event.target === logDrawer) {
-    logDrawer.classList.add("hidden");
+    closeDrawer(logDrawer);
   }
 });
 
 ruleDrawer.addEventListener("click", (event) => {
   if (event.target === ruleDrawer) {
-    ruleDrawer.classList.add("hidden");
+    closeDrawer(ruleDrawer);
   }
+});
+
+[logDrawer, ruleDrawer].forEach((drawer) => {
+  drawer.addEventListener("touchmove", (event) => {
+    if (!event.target.closest(".log-sheet")) event.preventDefault();
+  }, { passive: false });
 });
 
 tacticModal.addEventListener("click", (event) => {
@@ -239,6 +302,24 @@ tacticModal.addEventListener("click", (event) => {
     closeTacticModal();
   }
 });
+
+function openDrawer(drawer) {
+  drawer.classList.remove("hidden");
+  if (!document.body.classList.contains("drawer-open")) {
+    drawerScrollY = window.scrollY;
+    document.body.style.top = `-${drawerScrollY}px`;
+    document.body.classList.add("drawer-open");
+  }
+}
+
+function closeDrawer(drawer) {
+  drawer.classList.add("hidden");
+  if (logDrawer.classList.contains("hidden") && ruleDrawer.classList.contains("hidden")) {
+    document.body.classList.remove("drawer-open");
+    document.body.style.top = "";
+    window.scrollTo(0, drawerScrollY);
+  }
+}
 
 function saveAuth(data) {
   state.roomId = data.roomId;
@@ -255,7 +336,11 @@ async function refresh() {
     return;
   }
   try {
+    const previousGame = state.snapshot?.game;
     const snapshot = await api(`/api/rooms/${state.roomId}/state`, { auth: true });
+    if (shouldLockViewportForUpdate(previousGame, snapshot.game)) {
+      lockViewport();
+    }
     updateHandTracking(snapshot);
     state.snapshot = snapshot;
     render();
@@ -353,6 +438,7 @@ function render() {
     isReturningScoutCards
   );
   handPanel.classList.toggle("your-turn", isMyActionState);
+  handPanel.classList.toggle("game-ended", Boolean(game.winner));
   surrenderButton.disabled = Boolean(game.winner);
   p1Card.classList.toggle("active", game.currentPlayer === "p1" && !game.winner);
   p2Card.classList.toggle("active", game.currentPlayer === "p2" && !game.winner);
@@ -400,6 +486,7 @@ function render() {
   renderHand(game);
   renderLog(game.log);
   renderOpponentActionPrompt(game.log);
+  restoreLockedViewport();
 }
 
 function renderDrawControls(gameState, snapshot) {
@@ -429,10 +516,11 @@ function progressStatusText(gameState, snapshot) {
   if (gameState.pendingDraw?.playerId === snapshot.playerId) return "引く山札を選んでください";
   if (gameState.pendingDraw) return "相手が山札を選んでいます";
 
-  if (gameState.lastAutoDraw) return "山札が片方ないため自動で補充しました";
-  if (gameState.lastAutoPass) return "出せるカードがないため自動でパスしました";
-
-  return "カード配置後に山札を選択";
+  if (gameState.currentPlayer === snapshot.playerId) {
+    return "あなたの手番です。カードを選んで旗に置いてください";
+  }
+  const currentName = snapshot.players?.[gameState.currentPlayer]?.name || "相手";
+  return `${currentName}の手番です。相手の行動を待っています`;
 }
 
 function renderTurnPrompt(snapshot, gameState) {
@@ -457,18 +545,22 @@ function renderTacticActionBar(gameState) {
   const card = action?.source ? boardCardAt(action.source) : null;
   if (!action || gameState.winner || gameState.pendingDraw || gameState.pendingScout) {
     tacticActionBar.classList.add("hidden");
+    handPanel.classList.remove("tactic-active");
     return;
   }
 
   tacticActionBar.classList.remove("hidden");
-  tacticActionText.textContent = tacticActionBarText(action, card);
+  handPanel.classList.add("tactic-active");
+  const actionText = tacticActionBarText(action, card);
+  tacticActionText.textContent = actionText;
+  handHint.textContent = actionText;
   const hasSource = Boolean(card);
   const choosingTarget = action.phase === "target";
   const canMove = hasSource && !choosingTarget && (action.type === "tactic-redeploy" || action.type === "tactic-traitor");
   const canDiscard = hasSource && !choosingTarget && (action.type === "tactic-redeploy" || action.type === "tactic-deserter");
-  tacticMoveButton.textContent = action.type === "tactic-traitor" ? "置き場所を選ぶ" : "移動先を選ぶ";
-  tacticDiscardButton.textContent = action.type === "tactic-deserter" ? "脱走させる" : "除外する";
-  tacticCancelButton.textContent = choosingTarget ? "選択をやめる" : "キャンセル";
+  tacticMoveButton.textContent = action.type === "tactic-traitor" ? "置き場所" : "移動先";
+  tacticDiscardButton.textContent = action.type === "tactic-deserter" ? "脱走" : "除外";
+  tacticCancelButton.textContent = choosingTarget ? "やめる" : "取消";
   tacticMoveButton.classList.toggle("hidden", !canMove);
   tacticDiscardButton.classList.toggle("hidden", !canDiscard);
   tacticMoveButton.disabled = !canMove;
@@ -480,13 +572,13 @@ function tacticActionBarText(action, card) {
   const label = cardShortName(card);
   if (action.type === "tactic-redeploy") {
     if (action.phase === "target") return `選択中: ${label}。移動先の旗を選んでください`;
-    return `選択中: ${label}。移動するか、除外するか選んでください`;
+    return `選択中: ${label}。移動するか除外するか選んでください`;
   }
   if (action.type === "tactic-traitor") {
     if (action.phase === "target") return `選択中: ${label}。置き場所の旗を選んでください`;
-    return `選択中: ${label}。置き場所を選ぶか、キャンセルしてください`;
+    return `選択中: ${label}。置き場所を選ぶかキャンセルしてください`;
   }
-  if (action.type === "tactic-deserter") return `選択中: ${label}。脱走させるか、キャンセルしてください`;
+  if (action.type === "tactic-deserter") return `選択中: ${label}。脱走させるかキャンセルしてください`;
   return `選択中: ${label}`;
 }
 
@@ -554,6 +646,7 @@ function renderBoard(gameState, snapshot) {
     flagButton.classList.toggle("has-fog", flag.tactics?.some((tactic) => tactic.id === "tactic-fog"));
     flagButton.classList.toggle("has-mud", flag.tactics?.some((tactic) => tactic.id === "tactic-mud"));
     flagButton.addEventListener("click", (event) => {
+      clearActiveFocus();
       if (state.pendingTacticAction) {
         handleTacticBoardClick(event, index);
         return;
@@ -566,9 +659,9 @@ function renderBoard(gameState, snapshot) {
       <div class="flag-marker">
         <em class="flag-number">${index + 1}</em>
         <i></i>
-        ${renderFlagTactics(flag)}
         ${flag.owner ? `<span><strong class="flag-owner-name">${escapeHtml(snapshot.players[flag.owner].name)}</strong><small>獲得</small></span>` : ""}
       </div>
+      ${renderFlagTactics(flag)}
       ${renderBattleLane(flag.cards[bottomPlayerId], flag.scores[bottomPlayerId], "bottom", flag.requiredCards, index, bottomPlayerId)}
     `;
     board.appendChild(flagButton);
@@ -754,11 +847,12 @@ function renderBattleLane(cards, score, side, requiredCards = 3, flagIndex = 0, 
   const slots = Array.from({ length: requiredCards }, (_, index) => cards[index]);
   return `
     <div class="lane ${side}">
-      <div class="mini-cards">
+      <div class="mini-cards${cards.length ? " has-any-card" : ""}">
         ${slots.map((card, index) => (
-          card
-            ? cardMarkup(card, "mini", `data-flag-index="${flagIndex}" data-player-id="${playerId}" data-card-index="${index}"`, boardCardClasses(card, flagIndex, playerId, index))
-            : '<i class="empty"></i>'
+          `<span class="mini-slot${card ? " has-card" : ""}">
+            <i class="empty"></i>
+            ${card ? cardMarkup(card, "mini", `data-flag-index="${flagIndex}" data-player-id="${playerId}" data-card-index="${index}"`, boardCardClasses(card, flagIndex, playerId, index)) : ""}
+          </span>`
         )).join("")}
       </div>
     </div>
@@ -833,6 +927,7 @@ function renderHand(gameState) {
     );
     button.innerHTML = `${cardFaceMarkup(card)}${cardLabelsMarkup(card, gameState)}`;
     button.addEventListener("click", async () => {
+      clearActiveFocus();
       if (returningScoutCard) {
         await returnScoutCard(card.id);
         return;
@@ -1080,6 +1175,7 @@ function renderLog(entries) {
       const meta = logEntryMeta(entry);
       return `
         <li class="log-entry ${meta.actorClass} ${meta.kindClass}" value="${index + 1}">
+          <span class="log-number">${index + 1}</span>
           <span class="log-actor">${meta.actorLabel}</span>
           <span class="log-kind">${meta.kindLabel}</span>
           <span class="log-message">${escapeHtml(entry)}</span>
@@ -1191,15 +1287,19 @@ function needsTapConfirmation() {
 
 async function playCard(cardId, flagIndex) {
   try {
+    lockViewport();
     await api(`/api/rooms/${state.roomId}/play`, {
       method: "POST",
       auth: true,
       body: { cardId, flagIndex }
     });
+    clearActiveFocus();
     state.selectedCardId = null;
     state.confirmFlagIndex = null;
     await refresh();
   } catch (error) {
+    lockViewport();
+    clearActiveFocus();
     state.confirmFlagIndex = null;
     showError(error.message);
     await refresh();
@@ -1208,17 +1308,21 @@ async function playCard(cardId, flagIndex) {
 
 async function playTacticAction(payload) {
   try {
+    lockViewport();
     await api(`/api/rooms/${state.roomId}/play`, {
       method: "POST",
       auth: true,
       body: payload
     });
+    clearActiveFocus();
     state.pendingTacticAction = null;
     state.selectedCardId = null;
     state.confirmFlagIndex = null;
     state.confirmTacticSource = null;
     await refresh();
   } catch (error) {
+    lockViewport();
+    clearActiveFocus();
     state.confirmFlagIndex = null;
     state.confirmTacticSource = null;
     showError(error.message);
@@ -1237,14 +1341,18 @@ async function handleDeckClick(deckType) {
 
 async function drawFromDeck(deckType) {
   try {
+    lockViewport();
     await api(`/api/rooms/${state.roomId}/draw`, {
       method: "POST",
       auth: true,
       body: { deckType }
     });
+    clearActiveFocus();
     state.selectedCardId = null;
     await refresh();
   } catch (error) {
+    lockViewport();
+    clearActiveFocus();
     showError(error.message);
     await refresh();
   }
@@ -1252,14 +1360,18 @@ async function drawFromDeck(deckType) {
 
 async function drawScoutCard(deckType) {
   try {
+    lockViewport();
     await api(`/api/rooms/${state.roomId}/scout-draw`, {
       method: "POST",
       auth: true,
       body: { deckType }
     });
+    clearActiveFocus();
     state.selectedCardId = null;
     await refresh();
   } catch (error) {
+    lockViewport();
+    clearActiveFocus();
     showError(error.message);
     await refresh();
   }
@@ -1267,14 +1379,18 @@ async function drawScoutCard(deckType) {
 
 async function returnScoutCard(cardId) {
   try {
+    lockViewport();
     await api(`/api/rooms/${state.roomId}/scout-return`, {
       method: "POST",
       auth: true,
       body: { cardId }
     });
+    clearActiveFocus();
     state.selectedCardId = null;
     await refresh();
   } catch (error) {
+    lockViewport();
+    clearActiveFocus();
     showError(error.message);
     await refresh();
   }
@@ -1289,10 +1405,18 @@ function cardMarkup(card, size, attrs = "", extraClass = "") {
 function cardFaceMarkup(card, size = "") {
   if (card.type === "tactic") {
     const name = size === "mini" ? miniTacticName(card) : card.name;
+    const nameLength = Array.from(name).length;
+    const nameClass = size === "mini" && nameLength <= 2
+      ? " tactic-name-short"
+      : size === "mini" && nameLength <= 4
+        ? " tactic-name-medium"
+        : size === "mini"
+          ? " tactic-name-long"
+          : "";
     return `
       <span class="tactic-mark">策</span>
       <span class="card-sigil" aria-hidden="true"></span>
-      <strong class="tactic-name">${escapeHtml(name)}</strong>
+      <strong class="tactic-name${nameClass}">${escapeHtml(name)}</strong>
     `;
   }
   return `
@@ -1304,9 +1428,9 @@ function cardFaceMarkup(card, size = "") {
 
 function miniTacticName(card) {
   const names = {
-    "tactic-alexander": "アレク",
+    "tactic-alexander": "アレクサンドロス",
     "tactic-darius": "ダリウス",
-    "tactic-companion-cavalry": "騎兵",
+    "tactic-companion-cavalry": "援軍騎兵",
     "tactic-shield-bearers": "盾",
     "tactic-fog": "霧",
     "tactic-mud": "泥濘",

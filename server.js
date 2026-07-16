@@ -988,7 +988,7 @@ function publicState(room, playerId) {
           opponentLeft: Boolean(room.leftBy && room.leftBy !== playerId),
           opponentInactive: Boolean(room.players[otherId]) && Date.now() - otherLastSeenAt > PLAYER_INACTIVE_MS,
           leftBy: room.leftBy,
-          log: game.log.slice(-30)
+          log: game.log
         }
       : null
   };
